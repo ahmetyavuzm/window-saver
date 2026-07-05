@@ -86,7 +86,7 @@ export function App() {
             <StepList steps={selected.steps} onChange={handleStepsChange} />
             <StepEditorForm onAdd={handleAddSteps} />
             {runResult && (
-              <div className="run-console">
+              <div className={`run-console${runResult.ok ? '' : ' failed'}`}>
                 <h3>Run log ({runResult.ok ? 'ok' : 'failed'})</h3>
                 <ul>
                   {runResult.log.map((entry, i) => (

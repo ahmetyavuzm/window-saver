@@ -1,0 +1,20 @@
+appId: com.ayavuzm.window-saver
+productName: Window Saver
+directories:
+  output: release
+files:
+  - dist/**/*
+  - resources/**/*
+  - package.json
+extraMetadata:
+  main: dist/main/index.js
+mac:
+  category: public.app-category.productivity
+  icon: resources/icon.icns
+  target:
+    - target: dir
+      arch:
+        - arm64
+        - x64
+  extendInfo:
+    LSUIElement: true
