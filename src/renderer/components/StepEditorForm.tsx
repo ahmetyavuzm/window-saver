@@ -1,5 +1,8 @@
 import { useState } from 'react';
 import type { Step } from '../../shared/types';
+import { LaunchAppFields, type LaunchAppValue } from './fields/LaunchAppFields';
+import { OpenUrlFields, type OpenUrlValue } from './fields/OpenUrlFields';
+import { OpenTerminalFields, type OpenTerminalValue } from './fields/OpenTerminalFields';
 
 interface Props {
   onAdd: (steps: Step[]) => void;
@@ -30,21 +33,19 @@ export function StepEditorForm({ onAdd }: Props) {
   const [rectangleAction, setRectangleAction] = useState(RECTANGLE_ACTIONS[0]);
   const [windowTitle, setWindowTitle] = useState('');
   const [spaceIndex, setSpaceIndex] = useState('');
-  const [url, setUrl] = useState('');
-  const [browser, setBrowser] = useState<'default' | 'Google Chrome' | 'Safari' | 'Arc'>('default');
-  const [cwd, setCwd] = useState('');
-  const [command, setCommand] = useState('');
   const [ms, setMs] = useState(1000);
-  const [autoInsertWait, setAutoInsertWait] = useState(true);
+  const [launchApp, setLaunchApp] = useState<LaunchAppValue>({ appName: '', autoInsertWait: true });
+  const [openUrl, setOpenUrl] = useState<OpenUrlValue>({ url: '', browser: 'default' });
+  const [openTerminal, setOpenTerminal] = useState<OpenTerminalValue>({ cwd: '', command: '' });
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
     const steps: Step[] = [];
 
     if (type === 'launchApp') {
-      steps.push({ type: 'launchApp', id: newId(), appName });
-      if (autoInsertWait) {
-        steps.push({ type: 'waitForWindow', id: newId(), appName, timeoutMs: 8000 });
+      steps.push({ type: 'launchApp', id: newId(), appName: launchApp.appName });
+      if (launchApp.autoInsertWait) {
+        steps.push({ type: 'waitForWindow', id: newId(), appName: launchApp.appName, timeoutMs: 8000 });
       }
     } else if (type === 'positionWindow') {
       steps.push({
@@ -56,18 +57,24 @@ export function StepEditorForm({ onAdd }: Props) {
         spaceIndex: spaceIndex ? Number(spaceIndex) : undefined,
       });
     } else if (type === 'openUrl') {
-      steps.push({ type: 'openUrl', id: newId(), url, browser });
+      steps.push({ type: 'openUrl', id: newId(), url: openUrl.url, browser: openUrl.browser });
     } else if (type === 'openTerminal') {
-      steps.push({ type: 'openTerminal', id: newId(), app: 'Terminal', cwd, command: command || undefined });
+      steps.push({
+        type: 'openTerminal',
+        id: newId(),
+        app: 'Terminal',
+        cwd: openTerminal.cwd,
+        command: openTerminal.command || undefined,
+      });
     } else if (type === 'wait') {
       steps.push({ type: 'wait', id: newId(), ms });
     }
 
     onAdd(steps);
     setAppName('');
-    setUrl('');
-    setCwd('');
-    setCommand('');
+    setLaunchApp({ appName: '', autoInsertWait: true });
+    setOpenUrl({ url: '', browser: 'default' });
+    setOpenTerminal({ cwd: '', command: '' });
     setWindowTitle('');
     setSpaceIndex('');
   }
@@ -82,15 +89,7 @@ export function StepEditorForm({ onAdd }: Props) {
         <option value="wait">Wait</option>
       </select>
 
-      {type === 'launchApp' && (
-        <>
-          <input placeholder="App name (e.g. Slack)" value={appName} onChange={(e) => setAppName(e.target.value)} required />
-          <label className="checkbox">
-            <input type="checkbox" checked={autoInsertWait} onChange={(e) => setAutoInsertWait(e.target.checked)} />
-            Wait for window afterward
-          </label>
-        </>
-      )}
+      {type === 'launchApp' && <LaunchAppFields value={launchApp} onChange={setLaunchApp} />}
 
       {type === 'positionWindow' && (
         <>
@@ -117,24 +116,9 @@ export function StepEditorForm({ onAdd }: Props) {
         </>
       )}
 
-      {type === 'openUrl' && (
-        <>
-          <input placeholder="https://…" value={url} onChange={(e) => setUrl(e.target.value)} required />
-          <select value={browser} onChange={(e) => setBrowser(e.target.value as typeof browser)}>
-            <option value="default">Default browser</option>
-            <option value="Google Chrome">Google Chrome</option>
-            <option value="Safari">Safari</option>
-            <option value="Arc">Arc</option>
-          </select>
-        </>
-      )}
+      {type === 'openUrl' && <OpenUrlFields value={openUrl} onChange={setOpenUrl} />}
 
-      {type === 'openTerminal' && (
-        <>
-          <input placeholder="Working directory" value={cwd} onChange={(e) => setCwd(e.target.value)} required />
-          <input placeholder="Command (optional, e.g. claude)" value={command} onChange={(e) => setCommand(e.target.value)} />
-        </>
-      )}
+      {type === 'openTerminal' && <OpenTerminalFields value={openTerminal} onChange={setOpenTerminal} />}
 
       {type === 'wait' && (
         <input

@@ -83,3 +83,16 @@ body {
 .step-group-steps li { padding: 2px 0; color: #444; }
 .layout-canvas-toolbar { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
 .layout-canvas-toolbar input { padding: 4px 8px; }
+
+.box-config-overlay {
+  position: fixed; inset: 0; background: rgba(0, 0, 0, 0.35);
+  display: flex; align-items: center; justify-content: center; z-index: 1000;
+}
+.box-config-panel {
+  background: white; border-radius: 10px; padding: 20px; width: 320px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.box-config-panel h3 { margin: 0 0 4px; font-size: 14px; }
+.box-config-panel input, .box-config-panel select { padding: 6px 8px; }
+.box-config-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+.box-config-delete { margin-right: auto; color: #d00; }

@@ -1,21 +1,37 @@
 import { useEffect, useState } from 'react';
 import { useProfiles } from './hooks/useProfiles';
 import { useDisplays } from './hooks/useDisplays';
-import { useLayoutBoxes, addBoxSteps, updateBoxRect, deleteBox } from './hooks/useLayoutBoxes';
+import {
+  useLayoutBoxes,
+  createBoxSteps,
+  updateBoxConfig,
+  updateBoxRect,
+  deleteBox,
+  type BoxConfig,
+} from './hooks/useLayoutBoxes';
 import { ProfileList } from './components/ProfileList';
 import { StepList } from './components/StepList';
 import { StepEditorForm } from './components/StepEditorForm';
 import { LayoutCanvas } from './components/layout/LayoutCanvas';
 import { WindowBox } from './components/layout/WindowBox';
-import type { Step, RunResult } from '../shared/types';
+import { BoxConfigPanel } from './components/layout/BoxConfigPanel';
+import type { Step, RunResult, DisplayInfo } from '../shared/types';
+
+const DEFAULT_NEW_BOX_CONFIG: BoxConfig = { kind: 'launchApp', appName: '', autoInsertWait: true };
+
+interface ConfigTarget {
+  groupId: string | null; // null = creating a new box
+  display: DisplayInfo;
+  config: BoxConfig;
+}
 
 export function App() {
   const { profiles, loading, createProfile, deleteProfile, setSteps, updateProfile, runProfile } = useProfiles();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [runResult, setRunResult] = useState<RunResult | null>(null);
   const [running, setRunning] = useState(false);
-  const [newBoxAppName, setNewBoxAppName] = useState('');
   const [newBoxDisplayId, setNewBoxDisplayId] = useState<number | null>(null);
+  const [configTarget, setConfigTarget] = useState<ConfigTarget | null>(null);
   const displays = useDisplays();
 
   useEffect(() => {
@@ -61,11 +77,19 @@ export function App() {
   }
 
   function handleAddBox() {
-    if (!selected || !newBoxAppName.trim()) return;
     const display = displays.find((d) => d.id === newBoxDisplayId) ?? displays[0];
     if (!display) return;
-    handleStepsChange(addBoxSteps(selected.steps, display, newBoxAppName.trim()));
-    setNewBoxAppName('');
+    setConfigTarget({ groupId: null, display, config: DEFAULT_NEW_BOX_CONFIG });
+  }
+
+  function handleSaveConfig(config: BoxConfig) {
+    if (!selected || !configTarget) return;
+    if (configTarget.groupId === null) {
+      handleStepsChange(createBoxSteps(selected.steps, configTarget.display, config));
+    } else {
+      handleStepsChange(updateBoxConfig(selected.steps, configTarget.groupId, config));
+    }
+    setConfigTarget(null);
   }
 
   async function handleRun() {
@@ -116,12 +140,7 @@ export function App() {
                     </option>
                   ))}
                 </select>
-                <input
-                  placeholder="App name"
-                  value={newBoxAppName}
-                  onChange={(e) => setNewBoxAppName(e.target.value)}
-                />
-                <button onClick={handleAddBox} disabled={!newBoxAppName.trim()}>
+                <button onClick={handleAddBox} disabled={!displays.length}>
                   Add window
                 </button>
               </div>
@@ -138,6 +157,7 @@ export function App() {
                           parentWidth={display.bounds.width * scale}
                           parentHeight={display.bounds.height * scale}
                           label={box.label}
+                          onClick={() => setConfigTarget({ groupId: box.groupId, display, config: box.config })}
                           onChange={(next) => {
                             if (!selected) return;
                             handleStepsChange(updateBoxRect(selected.steps, box.groupId, next));
@@ -152,6 +172,22 @@ export function App() {
                 )}
               />
             </div>
+            {configTarget && (
+              <BoxConfigPanel
+                initial={configTarget.config}
+                onSave={handleSaveConfig}
+                onCancel={() => setConfigTarget(null)}
+                onDelete={
+                  configTarget.groupId
+                    ? () => {
+                        if (!selected || !configTarget.groupId) return;
+                        handleStepsChange(deleteBox(selected.steps, configTarget.groupId));
+                        setConfigTarget(null);
+                      }
+                    : undefined
+                }
+              />
+            )}
             <StepList steps={selected.steps} onChange={handleStepsChange} />
             <StepEditorForm onAdd={handleAddSteps} />
             {runResult && (
