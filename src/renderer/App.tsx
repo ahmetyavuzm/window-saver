@@ -4,13 +4,18 @@ import { ProfileList } from './components/ProfileList';
 import { StepList } from './components/StepList';
 import { StepEditorForm } from './components/StepEditorForm';
 import { LayoutCanvas } from './components/layout/LayoutCanvas';
-import type { Step, RunResult } from '../shared/types';
+import { WindowBox } from './components/layout/WindowBox';
+import type { Step, RunResult, NormalizedRect } from '../shared/types';
+
+const DEFAULT_BOX_RECT: NormalizedRect = { x: 0.2, y: 0.2, width: 0.3, height: 0.3 };
 
 export function App() {
   const { profiles, loading, createProfile, deleteProfile, setSteps, updateProfile, runProfile } = useProfiles();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [runResult, setRunResult] = useState<RunResult | null>(null);
   const [running, setRunning] = useState(false);
+  // M10 prototype only: ephemeral per-display box, not yet wired to profile.steps (see M11).
+  const [demoBoxRects, setDemoBoxRects] = useState<Record<number, NormalizedRect>>({});
 
   useEffect(() => {
     if (!selectedId && profiles.length > 0) setSelectedId(profiles[0].id);
@@ -84,7 +89,20 @@ export function App() {
             </div>
             <div className="layout-canvas-wrap">
               <h2>Screens</h2>
-              <LayoutCanvas />
+              <LayoutCanvas
+                renderBoxes={(display, scale) => {
+                  const rect = demoBoxRects[display.id] ?? DEFAULT_BOX_RECT;
+                  return (
+                    <WindowBox
+                      rect={rect}
+                      parentWidth={display.bounds.width * scale}
+                      parentHeight={display.bounds.height * scale}
+                      label="demo box"
+                      onChange={(next) => setDemoBoxRects((prev) => ({ ...prev, [display.id]: next }))}
+                    />
+                  );
+                }}
+              />
             </div>
             <StepList steps={selected.steps} onChange={handleStepsChange} />
             <StepEditorForm onAdd={handleAddSteps} />
