@@ -2,6 +2,9 @@ import type { Profile, Step, LogEntry, RunResult } from '../../shared/types.js';
 import { handleLaunchApp } from './handlers/launchApp.js';
 import { handleWaitForWindow } from './handlers/waitForWindow.js';
 import { handlePositionWindow } from './handlers/positionWindow.js';
+import { handleOpenUrl } from './handlers/openUrl.js';
+import { handleOpenTerminal } from './handlers/openTerminal.js';
+import { handleWait } from './handlers/wait.js';
 
 type StepResult = Omit<LogEntry, 'stepId' | 'timestamp'>;
 type Handler = (step: never) => Promise<StepResult>;
@@ -10,6 +13,9 @@ const handlers: Partial<Record<Step['type'], Handler>> = {
   launchApp: handleLaunchApp as Handler,
   waitForWindow: handleWaitForWindow as Handler,
   positionWindow: handlePositionWindow as Handler,
+  openUrl: handleOpenUrl as Handler,
+  openTerminal: handleOpenTerminal as Handler,
+  wait: handleWait as Handler,
 };
 
 // launchApp/waitForWindow have nothing to run for if they fail; other step
