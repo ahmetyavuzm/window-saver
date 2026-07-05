@@ -1,0 +1,70 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Window Saver — Setup</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; padding: 24px; background: #1e1e1e; color: #eee; }
+  h1 { font-size: 18px; margin-bottom: 4px; }
+  p { color: #aaa; font-size: 13px; line-height: 1.5; }
+  .perm { display: flex; align-items: center; justify-content: space-between; padding: 12px; margin: 12px 0; border-radius: 8px; background: #2a2a2a; }
+  .perm .status { font-size: 13px; }
+  .ok { color: #4caf50; }
+  .missing { color: #f44336; }
+  button { background: #0a84ff; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  button.secondary { background: #444; }
+  .actions { display: flex; gap: 8px; margin-top: 24px; justify-content: flex-end; }
+</style>
+</head>
+<body>
+  <h1>Window Saver needs a couple of permissions</h1>
+  <p>These let Window Saver detect windows and drive AppleScript (Terminal, Rectangle, System Events) on your behalf.</p>
+
+  <div class="perm">
+    <div>
+      <div>Accessibility</div>
+      <div class="status" id="accessibility-status">checking…</div>
+    </div>
+    <button id="accessibility-btn">Open System Settings</button>
+  </div>
+
+  <div class="perm">
+    <div>
+      <div>Automation</div>
+      <div class="status" id="automation-status">checking…</div>
+    </div>
+    <button id="automation-btn">Open System Settings</button>
+  </div>
+
+  <div class="actions">
+    <button class="secondary" id="recheck-btn">Re-check</button>
+    <button id="continue-btn">Continue</button>
+  </div>
+
+  <script>
+    async function refresh() {
+      const status = await window.windowSaver.checkPermissions();
+      const accEl = document.getElementById('accessibility-status');
+      const autoEl = document.getElementById('automation-status');
+      accEl.textContent = status.accessibility ? 'Granted' : 'Not granted';
+      accEl.className = 'status ' + (status.accessibility ? 'ok' : 'missing');
+      autoEl.textContent = status.automation ? 'Granted' : 'Not granted';
+      autoEl.className = 'status ' + (status.automation ? 'ok' : 'missing');
+    }
+
+    document.getElementById('accessibility-btn').addEventListener('click', () => {
+      window.windowSaver.openPermissionSettings('accessibility');
+    });
+    document.getElementById('automation-btn').addEventListener('click', () => {
+      window.windowSaver.openPermissionSettings('automation');
+    });
+    document.getElementById('recheck-btn').addEventListener('click', refresh);
+    document.getElementById('continue-btn').addEventListener('click', async () => {
+      await window.windowSaver.completeOnboarding();
+      window.close();
+    });
+
+    refresh();
+  </script>
+</body>
+</html>

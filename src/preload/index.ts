@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { Profile, Step } from '../shared/types.js';
+import type { Profile, Step, PermissionStatus } from '../shared/types.js';
 
 const api = {
   listProfiles: (): Promise<Profile[]> => ipcRenderer.invoke('profiles:list'),
@@ -13,6 +13,12 @@ const api = {
   addStep: (profileId: string, step: Step): Promise<Profile | undefined> =>
     ipcRenderer.invoke('profiles:addStep', profileId, step),
   runProfile: (profileId: string): Promise<void> => ipcRenderer.invoke('profiles:run', profileId),
+  checkHotkeyConflict: (accelerator: string, ownerProfileId: string): Promise<boolean> =>
+    ipcRenderer.invoke('hotkeys:checkConflict', accelerator, ownerProfileId),
+  checkPermissions: (): Promise<PermissionStatus> => ipcRenderer.invoke('permissions:check'),
+  openPermissionSettings: (kind: 'accessibility' | 'automation'): Promise<void> =>
+    ipcRenderer.invoke('permissions:openSettings', kind),
+  completeOnboarding: (): Promise<void> => ipcRenderer.invoke('settings:completeOnboarding'),
 };
 
 export type WindowSaverApi = typeof api;

@@ -38,6 +38,13 @@ export function App() {
 
   async function handleHotkeyChange(hotkey: string) {
     if (!selected) return;
+    if (hotkey) {
+      const conflict = await window.windowSaver.checkHotkeyConflict(hotkey, selected.id);
+      if (conflict) {
+        window.alert(`"${hotkey}" is already in use by another profile or app.`);
+        return;
+      }
+    }
     await updateProfile(selected.id, { hotkey: hotkey || undefined });
   }
 

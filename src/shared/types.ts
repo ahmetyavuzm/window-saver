@@ -42,3 +42,8 @@ export interface RunResult {
   ok: boolean;
   log: LogEntry[];
 }
+
+export interface PermissionStatus {
+  accessibility: boolean;
+  automation: boolean;
+}
