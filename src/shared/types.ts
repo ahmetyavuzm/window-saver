@@ -77,6 +77,18 @@ export interface PermissionStatus {
   automation: boolean;
 }
 
+export interface StopResultEntry {
+  label: string;
+  closed: boolean;
+  method: string;
+}
+
+export interface StopResult {
+  profileId: string;
+  ok: boolean;
+  results: StopResultEntry[];
+}
+
 export interface DisplayInfo {
   id: number;
   bounds: { x: number; y: number; width: number; height: number };

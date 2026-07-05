@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { Profile, Step, PermissionStatus, DisplayInfo } from '../shared/types.js';
+import type { Profile, Step, PermissionStatus, DisplayInfo, StopResult } from '../shared/types.js';
 
 const api = {
   listProfiles: (): Promise<Profile[]> => ipcRenderer.invoke('profiles:list'),
@@ -13,6 +13,7 @@ const api = {
   addStep: (profileId: string, step: Step): Promise<Profile | undefined> =>
     ipcRenderer.invoke('profiles:addStep', profileId, step),
   runProfile: (profileId: string): Promise<void> => ipcRenderer.invoke('profiles:run', profileId),
+  stopProfile: (profileId: string): Promise<StopResult> => ipcRenderer.invoke('profiles:stop', profileId),
   checkHotkeyConflict: (accelerator: string, ownerProfileId: string): Promise<boolean> =>
     ipcRenderer.invoke('hotkeys:checkConflict', accelerator, ownerProfileId),
   checkPermissions: (): Promise<PermissionStatus> => ipcRenderer.invoke('permissions:check'),

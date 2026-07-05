@@ -50,5 +50,9 @@ export function useProfiles() {
     return window.windowSaver.runProfile(id);
   }, []);
 
-  return { profiles, loading, refresh, createProfile, deleteProfile, updateProfile, setSteps, runProfile };
+  const stopProfile = useCallback(async (id: string) => {
+    return window.windowSaver.stopProfile(id);
+  }, []);
+
+  return { profiles, loading, refresh, createProfile, deleteProfile, updateProfile, setSteps, runProfile, stopProfile };
 }

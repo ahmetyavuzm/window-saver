@@ -5,7 +5,9 @@ import { rebuildTrayMenu } from './tray.js';
 import { reregisterHotkeys } from './hotkeys.js';
 import { checkPermissions, PERMISSION_SETTINGS_URLS } from './permissions.js';
 import { listDisplays } from './displays.js';
-import type { Step } from '../shared/types.js';
+import * as registry from './engine/registry.js';
+import { terminateTarget } from './engine/terminate.js';
+import type { Step, StopResult } from '../shared/types.js';
 
 function onProfilesChanged(): void {
   rebuildTrayMenu();
@@ -42,6 +44,13 @@ export function registerIpcHandlers(): void {
     const profile = store.getProfile(profileId);
     if (!profile) return { profileId, ok: false, log: [] };
     return runProfile(profile);
+  });
+  ipcMain.handle('profiles:stop', async (_event, profileId: string): Promise<StopResult> => {
+    const targets = registry.getTracked(profileId);
+    const results = await Promise.all(targets.map((target) => terminateTarget(target)));
+    // Cleared regardless of partial failures so Close never gets permanently stuck.
+    registry.clear(profileId);
+    return { profileId, ok: results.every((r) => r.closed), results };
   });
 
   ipcMain.handle('hotkeys:checkConflict', (_event, accelerator: string, ownerProfileId: string) => {

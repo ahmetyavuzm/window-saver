@@ -1,4 +1,4 @@
-import type { Profile, Step, RunResult, PermissionStatus, DisplayInfo } from '../shared/types';
+import type { Profile, Step, RunResult, PermissionStatus, DisplayInfo, StopResult } from '../shared/types';
 
 export interface WindowSaverApi {
   listProfiles(): Promise<Profile[]>;
@@ -11,6 +11,7 @@ export interface WindowSaverApi {
   deleteProfile(id: string): Promise<boolean>;
   addStep(profileId: string, step: Step): Promise<Profile | undefined>;
   runProfile(profileId: string): Promise<RunResult>;
+  stopProfile(profileId: string): Promise<StopResult>;
   checkHotkeyConflict(accelerator: string, ownerProfileId: string): Promise<boolean>;
   checkPermissions(): Promise<PermissionStatus>;
   openPermissionSettings(kind: 'accessibility' | 'automation'): Promise<void>;

@@ -26,10 +26,13 @@ interface ConfigTarget {
 }
 
 export function App() {
-  const { profiles, loading, createProfile, deleteProfile, setSteps, updateProfile, runProfile } = useProfiles();
+  const { profiles, loading, createProfile, deleteProfile, setSteps, updateProfile, runProfile, stopProfile } =
+    useProfiles();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [runResult, setRunResult] = useState<RunResult | null>(null);
   const [running, setRunning] = useState(false);
+  const [stopping, setStopping] = useState(false);
+  const [hasTrackedTargets, setHasTrackedTargets] = useState(false);
   const [newBoxDisplayId, setNewBoxDisplayId] = useState<number | null>(null);
   const [configTarget, setConfigTarget] = useState<ConfigTarget | null>(null);
   const displays = useDisplays();
@@ -40,6 +43,13 @@ export function App() {
       setSelectedId(profiles[0]?.id ?? null);
     }
   }, [profiles, selectedId]);
+
+  useEffect(() => {
+    // Tracked targets live in the main process keyed by profileId; this
+    // renderer-side flag must reset on profile switch so Close doesn't
+    // linger for a profile that was never run in this session.
+    setHasTrackedTargets(false);
+  }, [selectedId]);
 
   const selected = profiles.find((p) => p.id === selectedId) ?? null;
   const layoutBoxes = useLayoutBoxes(selected?.steps ?? []);
@@ -99,6 +109,25 @@ export function App() {
     const result = await runProfile(selected.id);
     setRunResult(result);
     setRunning(false);
+    if (result.ok) setHasTrackedTargets(true);
+  }
+
+  async function handleStop() {
+    if (!selected) return;
+    setStopping(true);
+    const stopResult = await stopProfile(selected.id);
+    setRunResult((prev) => {
+      const stopLog = stopResult.results.map((r) => ({
+        stepId: 'stop',
+        status: (r.closed ? 'ok' : 'error') as 'ok' | 'error',
+        message: `Closed ${r.label}: ${r.method}`,
+        timestamp: new Date().toISOString(),
+      }));
+      if (!prev) return { profileId: selected.id, ok: stopResult.ok, log: stopLog };
+      return { ...prev, log: [...prev.log, ...stopLog] };
+    });
+    setHasTrackedTargets(false);
+    setStopping(false);
   }
 
   if (loading) return <div className="app">Loading…</div>;
@@ -126,6 +155,11 @@ export function App() {
               <button disabled={running} onClick={() => void handleRun()}>
                 {running ? 'Running…' : 'Run'}
               </button>
+              {hasTrackedTargets && (
+                <button disabled={stopping} onClick={() => void handleStop()}>
+                  {stopping ? 'Closing…' : 'Close'}
+                </button>
+              )}
             </div>
             <div className="layout-canvas-wrap">
               <h2>Screens</h2>

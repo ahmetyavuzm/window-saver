@@ -5,8 +5,9 @@ import { handlePositionWindow } from './handlers/positionWindow.js';
 import { handleOpenUrl } from './handlers/openUrl.js';
 import { handleOpenTerminal } from './handlers/openTerminal.js';
 import { handleWait } from './handlers/wait.js';
+import * as registry from './registry.js';
+import type { StepResult } from './types.js';
 
-type StepResult = Omit<LogEntry, 'stepId' | 'timestamp'>;
 type Handler = (step: never) => Promise<StepResult>;
 
 const handlers: Partial<Record<Step['type'], Handler>> = {
@@ -28,6 +29,10 @@ export async function runProfile(
 ): Promise<RunResult> {
   const log: LogEntry[] = [];
   let ok = true;
+
+  // A fresh run replaces whatever the previous run tracked — stale targets
+  // from an unstopped earlier run would otherwise sit alongside new ones.
+  registry.clear(profile.id);
 
   const emit = (entry: LogEntry) => {
     log.push(entry);
@@ -51,7 +56,11 @@ export async function runProfile(
     emit({ stepId: step.id, status: 'running', message: `Running ${step.type}`, timestamp: new Date().toISOString() });
 
     const result = await handler(step as never);
-    const entry: LogEntry = { stepId: step.id, timestamp: new Date().toISOString(), ...result };
+    if (result.meta?.target) {
+      registry.track(profile.id, result.meta.target);
+    }
+    const { meta: _meta, ...logFields } = result;
+    const entry: LogEntry = { stepId: step.id, timestamp: new Date().toISOString(), ...logFields };
     emit(entry);
 
     if (result.status === 'error') {
