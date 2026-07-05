@@ -1,0 +1,29 @@
+{
+  "name": "window-saver",
+  "version": "1.0.0",
+  "description": "Menu-bar workspace launcher: save a set of apps/windows/urls/terminals as a Profile, replay it with one click or hotkey.",
+  "private": true,
+  "type": "module",
+  "main": "dist/main/index.js",
+  "author": "",
+  "license": "ISC",
+  "scripts": {
+    "build:main": "tsc -p tsconfig.json",
+    "start": "npm run build:main && electron .",
+    "dev": "npm run start",
+    "dist": "npm run build:main && electron-builder --mac"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.3",
+    "cross-env": "^10.1.0",
+    "electron": "^41.7.1",
+    "electron-builder": "^26.15.3",
+    "typescript": "^6.0.3",
+    "vite": "^8.1.3",
+    "wait-on": "^9.0.10"
+  },
+  "dependencies": {
+    "electron-store": "^11.0.2",
+    "uuid": "^14.0.1"
+  }
+}
