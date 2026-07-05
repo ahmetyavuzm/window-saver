@@ -3,6 +3,7 @@ import { useProfiles } from './hooks/useProfiles';
 import { ProfileList } from './components/ProfileList';
 import { StepList } from './components/StepList';
 import { StepEditorForm } from './components/StepEditorForm';
+import { LayoutCanvas } from './components/layout/LayoutCanvas';
 import type { Step, RunResult } from '../shared/types';
 
 export function App() {
@@ -80,6 +81,10 @@ export function App() {
               <button disabled={running} onClick={() => void handleRun()}>
                 {running ? 'Running…' : 'Run'}
               </button>
+            </div>
+            <div className="layout-canvas-wrap">
+              <h2>Screens</h2>
+              <LayoutCanvas />
             </div>
             <StepList steps={selected.steps} onChange={handleStepsChange} />
             <StepEditorForm onAdd={handleAddSteps} />

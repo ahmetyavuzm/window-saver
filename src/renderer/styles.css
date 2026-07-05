@@ -52,3 +52,15 @@ body {
 .run-console li.ok { color: #0a0; }
 .run-console li.running { color: #888; }
 .empty-state { color: #888; text-align: center; margin-top: 60px; }
+
+.layout-canvas-wrap { margin-bottom: 20px; }
+.layout-canvas-wrap h2 { font-size: 13px; margin: 0 0 8px; }
+.layout-canvas { background: #dfe1e6; border-radius: 8px; }
+.display-frame {
+  background: #2b2d33; border: 1px solid #46484f; border-radius: 4px;
+  overflow: hidden;
+}
+.display-frame-label {
+  position: absolute; top: 4px; left: 6px;
+  color: #9a9ca3; font-size: 10px; pointer-events: none;
+}
