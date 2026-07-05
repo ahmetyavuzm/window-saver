@@ -71,5 +71,5 @@ export async function runProfile(
     }
   }
 
-  return { profileId: profile.id, ok, log };
+  return { profileId: profile.id, ok, log, hasTrackedTargets: registry.hasTracked(profile.id) };
 }

@@ -70,6 +70,7 @@ export interface RunResult {
   profileId: string;
   ok: boolean;
   log: LogEntry[];
+  hasTrackedTargets: boolean;
 }
 
 export interface PermissionStatus {

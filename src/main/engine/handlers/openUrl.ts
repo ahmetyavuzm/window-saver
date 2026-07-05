@@ -92,15 +92,23 @@ export async function handleOpenUrl(step: OpenUrlStep): Promise<StepResult> {
     }
 
     let target: TrackedTarget | undefined;
-    if (step.browser !== 'default') {
+    let untrackedNote: string | undefined;
+    if (step.browser === 'default') {
+      untrackedNote = 'not closeable via Close — "default browser" can\'t be targeted by AppleScript';
+    } else {
       target = step.newWindow
         ? await resolveNewWindowTarget(step.browser, step.url)
         : await resolveExistingTabTarget(step.browser, step.url);
+      if (!target) {
+        untrackedNote = step.newWindow
+          ? 'not closeable via Close — could not resolve the new window'
+          : 'not closeable via Close — no matching tab found (only Chrome/Safari support tab matching)';
+      }
     }
 
     return {
       status: 'ok',
-      message: `Opened ${step.url} in ${step.browser}`,
+      message: `Opened ${step.url} in ${step.browser}${untrackedNote ? ` (${untrackedNote})` : ''}`,
       meta: target ? { target } : undefined,
     };
   } catch (error) {

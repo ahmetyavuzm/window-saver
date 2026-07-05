@@ -109,7 +109,7 @@ export function App() {
     const result = await runProfile(selected.id);
     setRunResult(result);
     setRunning(false);
-    if (result.ok) setHasTrackedTargets(true);
+    setHasTrackedTargets(result.hasTrackedTargets);
   }
 
   async function handleStop() {
@@ -123,7 +123,7 @@ export function App() {
         message: `Closed ${r.label}: ${r.method}`,
         timestamp: new Date().toISOString(),
       }));
-      if (!prev) return { profileId: selected.id, ok: stopResult.ok, log: stopLog };
+      if (!prev) return { profileId: selected.id, ok: stopResult.ok, log: stopLog, hasTrackedTargets: false };
       return { ...prev, log: [...prev.log, ...stopLog] };
     });
     setHasTrackedTargets(false);

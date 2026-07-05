@@ -42,7 +42,7 @@ export function registerIpcHandlers(): void {
   });
   ipcMain.handle('profiles:run', async (_event, profileId: string) => {
     const profile = store.getProfile(profileId);
-    if (!profile) return { profileId, ok: false, log: [] };
+    if (!profile) return { profileId, ok: false, log: [], hasTrackedTargets: false };
     return runProfile(profile);
   });
   ipcMain.handle('profiles:stop', async (_event, profileId: string): Promise<StopResult> => {
