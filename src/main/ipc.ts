@@ -4,6 +4,7 @@ import { runProfile } from './engine/runner.js';
 import { rebuildTrayMenu } from './tray.js';
 import { reregisterHotkeys } from './hotkeys.js';
 import { checkPermissions, PERMISSION_SETTINGS_URLS } from './permissions.js';
+import { listDisplays } from './displays.js';
 import type { Step } from '../shared/types.js';
 
 function onProfilesChanged(): void {
@@ -56,4 +57,6 @@ export function registerIpcHandlers(): void {
     shell.openExternal(PERMISSION_SETTINGS_URLS[kind]),
   );
   ipcMain.handle('settings:completeOnboarding', () => store.setOnboardingComplete(true));
+
+  ipcMain.handle('displays:list', () => listDisplays());
 }

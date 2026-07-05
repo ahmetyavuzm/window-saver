@@ -2,7 +2,7 @@ import Store from 'electron-store';
 import { randomUUID } from 'node:crypto';
 import type { Profile, StoreSchema, Step } from '../shared/types.js';
 
-const CURRENT_SCHEMA_VERSION = 1;
+const CURRENT_SCHEMA_VERSION = 2;
 
 const store = new Store<StoreSchema>({
   name: 'config',
@@ -14,6 +14,19 @@ const store = new Store<StoreSchema>({
     },
   },
 });
+
+migrateStore();
+
+/**
+ * v1 -> v2 is purely additive (positionWindow.placement, groupId on several step
+ * types) so existing profiles already satisfy the v2 shape as-is. This just bumps
+ * the stored version and establishes the pattern for future, non-trivial migrations.
+ */
+function migrateStore(): void {
+  const settings = store.get('settings');
+  if (settings.schemaVersion >= CURRENT_SCHEMA_VERSION) return;
+  store.set('settings', { ...settings, schemaVersion: CURRENT_SCHEMA_VERSION });
+}
 
 export function listProfiles(): Profile[] {
   return store.get('profiles');

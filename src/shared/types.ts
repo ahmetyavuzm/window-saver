@@ -1,13 +1,34 @@
+export interface DisplayRef {
+  displayId: number;
+  widthPx: number;
+  heightPx: number;
+}
+
+/** 0..1, relative to the target display's workArea (menu bar/dock already excluded). */
+export interface NormalizedRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface WindowPlacement {
+  display: DisplayRef;
+  rect: NormalizedRect;
+}
+
 export type Step =
-  | { type: 'launchApp'; id: string; appName: string; bundleId?: string; args?: string[] }
-  | { type: 'waitForWindow'; id: string; appName: string; timeoutMs?: number }
+  | { type: 'launchApp'; id: string; appName: string; bundleId?: string; args?: string[]; groupId?: string }
+  | { type: 'waitForWindow'; id: string; appName: string; timeoutMs?: number; groupId?: string }
   | {
       type: 'positionWindow';
       id: string;
       appName: string;
-      rectangleAction: string;
+      rectangleAction?: string;
+      placement?: WindowPlacement;
       windowTitle?: string;
       spaceIndex?: number;
+      groupId?: string;
     }
   | {
       type: 'openUrl';
@@ -15,8 +36,9 @@ export type Step =
       url: string;
       browser: 'default' | 'Google Chrome' | 'Safari' | 'Arc';
       newWindow?: boolean;
+      groupId?: string;
     }
-  | { type: 'openTerminal'; id: string; app: 'Terminal'; cwd: string; command?: string }
+  | { type: 'openTerminal'; id: string; app: 'Terminal'; cwd: string; command?: string; groupId?: string }
   | { type: 'wait'; id: string; ms: number }
   | { type: 'customAppleScript'; id: string; script: string };
 
@@ -53,4 +75,11 @@ export interface RunResult {
 export interface PermissionStatus {
   accessibility: boolean;
   automation: boolean;
+}
+
+export interface DisplayInfo {
+  id: number;
+  bounds: { x: number; y: number; width: number; height: number };
+  workArea: { x: number; y: number; width: number; height: number };
+  isPrimary: boolean;
 }

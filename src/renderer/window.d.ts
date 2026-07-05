@@ -1,4 +1,4 @@
-import type { Profile, Step, RunResult, PermissionStatus } from '../shared/types';
+import type { Profile, Step, RunResult, PermissionStatus, DisplayInfo } from '../shared/types';
 
 export interface WindowSaverApi {
   listProfiles(): Promise<Profile[]>;
@@ -15,6 +15,8 @@ export interface WindowSaverApi {
   checkPermissions(): Promise<PermissionStatus>;
   openPermissionSettings(kind: 'accessibility' | 'automation'): Promise<void>;
   completeOnboarding(): Promise<void>;
+  listDisplays(): Promise<DisplayInfo[]>;
+  onDisplaysChanged(cb: (displays: DisplayInfo[]) => void): () => void;
 }
 
 declare global {

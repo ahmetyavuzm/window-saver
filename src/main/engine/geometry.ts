@@ -1,8 +1,64 @@
+import { screen, type Display } from 'electron';
+import type { DisplayRef, NormalizedRect } from '../../shared/types.js';
+
 export interface Bounds {
   x: number;
   y: number;
   width: number;
   height: number;
+}
+
+export interface DisplayResolution {
+  display: Display;
+  usedFallback: boolean;
+  fallbackReason?: string;
+}
+
+// Resolves a saved DisplayRef to a currently-connected Electron Display.
+// Falls back defensively if the exact display is no longer present (monitor
+// unplugged/replaced) instead of silently mis-placing the window — always
+// reports which path was taken so callers can log it.
+export function resolveDisplayForPlacement(ref: DisplayRef): DisplayResolution {
+  const displays = screen.getAllDisplays();
+
+  const exact = displays.find((d) => d.id === ref.displayId);
+  if (exact) return { display: exact, usedFallback: false };
+
+  let nearest = displays[0];
+  let bestDiff = Infinity;
+  for (const d of displays) {
+    const diff = Math.abs(d.size.width - ref.widthPx) + Math.abs(d.size.height - ref.heightPx);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      nearest = d;
+    }
+  }
+  if (nearest) {
+    return {
+      display: nearest,
+      usedFallback: true,
+      fallbackReason: `saved display not found, using nearest match by resolution (${nearest.size.width}x${nearest.size.height})`,
+    };
+  }
+
+  const primary = screen.getPrimaryDisplay();
+  return {
+    display: primary,
+    usedFallback: true,
+    fallbackReason: `saved display not found and no displays enumerated, using primary display`,
+  };
+}
+
+// Converts a 0..1 NormalizedRect (relative to a display's workArea) into
+// absolute pixel Bounds in the same top-left-origin coordinate space used
+// throughout this engine (Electron `screen` and System Events agree on this).
+export function boundsFromNormalizedRect(rect: NormalizedRect, workArea: Bounds): Bounds {
+  return {
+    x: Math.round(workArea.x + rect.x * workArea.width),
+    y: Math.round(workArea.y + rect.y * workArea.height),
+    width: Math.round(rect.width * workArea.width),
+    height: Math.round(rect.height * workArea.height),
+  };
 }
 
 // Computes the target window bounds for a Rectangle-style action name within

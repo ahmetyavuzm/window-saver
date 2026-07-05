@@ -21,7 +21,8 @@ function summarize(step: Step): string {
       ]
         .filter(Boolean)
         .join(', ');
-      return `Position ${step.appName}${detail ? ` (${detail})` : ''} → ${step.rectangleAction}`;
+      const target = step.placement ? 'custom placement' : step.rectangleAction ?? 'maximize';
+      return `Position ${step.appName}${detail ? ` (${detail})` : ''} → ${target}`;
     }
     case 'openUrl':
       return `Open ${step.url} in ${step.browser}`;

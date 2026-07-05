@@ -2,7 +2,7 @@ import { screen } from 'electron';
 import type { Step, LogEntry } from '../../../shared/types.js';
 import { runAppleScript, resolveProcessRef, toAppleScriptString } from '../applescript.js';
 import { isYabaiAvailable, ensureSpaceCount, moveFocusedWindowToSpace, YABAI_MISSING_MESSAGE } from '../yabai.js';
-import { computeTargetBounds } from '../geometry.js';
+import { computeTargetBounds, resolveDisplayForPlacement, boundsFromNormalizedRect } from '../geometry.js';
 
 type PositionWindowStep = Extract<Step, { type: 'positionWindow' }>;
 
@@ -34,11 +34,16 @@ async function setWindowBounds(
   windowRef: string,
   bounds: { x: number; y: number; width: number; height: number },
 ): Promise<void> {
+  // Order matters for displays at negative coordinates (a secondary display
+  // positioned above/left of the primary): setting position first while the
+  // window still has its old size can leave it mostly off every display,
+  // which macOS then refuses to resize (-10006). Setting size first, then
+  // position, avoids that intermediate off-screen state.
   await runAppleScript(`
     tell application "System Events"
       set targetWindow to (${windowRef})
-      set position of targetWindow to {${bounds.x}, ${bounds.y}}
       set size of targetWindow to {${bounds.width}, ${bounds.height}}
+      set position of targetWindow to {${bounds.x}, ${bounds.y}}
     end tell
   `);
 }
@@ -78,23 +83,36 @@ export async function handlePositionWindow(
     // unreliable — it silently no-ops on some setups. Computing and setting
     // the window frame directly via System Events has no external dependency
     // and is the same mechanism already proven reliable for reading bounds.
-    const currentBounds = await getWindowBounds(windowRef);
-    const display = screen.getDisplayNearestPoint({
-      x: Math.round(currentBounds.x + currentBounds.width / 2),
-      y: Math.round(currentBounds.y + currentBounds.height / 2),
-    });
-    const targetBounds = computeTargetBounds(step.rectangleAction, display.workArea);
+    let targetBounds: { x: number; y: number; width: number; height: number };
+    let fallbackReason: string | undefined;
+    let actionLabel: string;
+
+    if (step.placement) {
+      const resolution = resolveDisplayForPlacement(step.placement.display);
+      fallbackReason = resolution.fallbackReason;
+      targetBounds = boundsFromNormalizedRect(step.placement.rect, resolution.display.workArea);
+      actionLabel = 'custom placement';
+    } else {
+      const currentBounds = await getWindowBounds(windowRef);
+      const display = screen.getDisplayNearestPoint({
+        x: Math.round(currentBounds.x + currentBounds.width / 2),
+        y: Math.round(currentBounds.y + currentBounds.height / 2),
+      });
+      targetBounds = computeTargetBounds(step.rectangleAction ?? 'maximize', display.workArea);
+      actionLabel = step.rectangleAction ?? 'maximize';
+    }
     await setWindowBounds(windowRef, targetBounds);
 
     const detail = [
       step.windowTitle ? `window "${step.windowTitle}"` : null,
       step.spaceIndex !== undefined ? `space ${step.spaceIndex}` : null,
+      fallbackReason ?? null,
     ]
       .filter(Boolean)
       .join(', ');
     return {
       status: 'ok',
-      message: `Positioned ${step.appName}${detail ? ` (${detail})` : ''} → ${step.rectangleAction}`,
+      message: `Positioned ${step.appName}${detail ? ` (${detail})` : ''} → ${actionLabel}`,
     };
   } catch (error) {
     return {

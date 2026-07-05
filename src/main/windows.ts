@@ -36,6 +36,10 @@ export function showOnboardingWindow(): BrowserWindow {
   return onboardingWindow;
 }
 
+export function getEditorWindow(): BrowserWindow | null {
+  return editorWindow && !editorWindow.isDestroyed() ? editorWindow : null;
+}
+
 export function showEditorWindow(): BrowserWindow {
   if (editorWindow && !editorWindow.isDestroyed()) {
     editorWindow.show();

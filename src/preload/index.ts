@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { Profile, Step, PermissionStatus } from '../shared/types.js';
+import type { Profile, Step, PermissionStatus, DisplayInfo } from '../shared/types.js';
 
 const api = {
   listProfiles: (): Promise<Profile[]> => ipcRenderer.invoke('profiles:list'),
@@ -19,6 +19,12 @@ const api = {
   openPermissionSettings: (kind: 'accessibility' | 'automation'): Promise<void> =>
     ipcRenderer.invoke('permissions:openSettings', kind),
   completeOnboarding: (): Promise<void> => ipcRenderer.invoke('settings:completeOnboarding'),
+  listDisplays: (): Promise<DisplayInfo[]> => ipcRenderer.invoke('displays:list'),
+  onDisplaysChanged: (cb: (displays: DisplayInfo[]) => void): (() => void) => {
+    const listener = (_event: unknown, displays: DisplayInfo[]) => cb(displays);
+    ipcRenderer.on('displays:changed', listener);
+    return () => ipcRenderer.removeListener('displays:changed', listener);
+  },
 };
 
 export type WindowSaverApi = typeof api;
