@@ -8,11 +8,12 @@ interface WindowBoxProps {
   label: string;
   onChange: (rect: NormalizedRect) => void;
   onClick?: () => void;
+  onDelete?: () => void;
 }
 
 const MIN_SIZE_PX = 40;
 
-export function WindowBox({ rect, parentWidth, parentHeight, label, onChange, onClick }: WindowBoxProps) {
+export function WindowBox({ rect, parentWidth, parentHeight, label, onChange, onClick, onDelete }: WindowBoxProps) {
   return (
     <Rnd
       className="window-box"
@@ -40,6 +41,18 @@ export function WindowBox({ rect, parentWidth, parentHeight, label, onChange, on
       onClick={onClick}
     >
       <div className="window-box-label">{label}</div>
+      {onDelete && (
+        <button
+          className="window-box-delete"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+        >
+          ×
+        </button>
+      )}
     </Rnd>
   );
 }

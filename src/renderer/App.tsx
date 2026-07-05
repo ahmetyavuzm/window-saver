@@ -1,21 +1,22 @@
 import { useEffect, useState } from 'react';
 import { useProfiles } from './hooks/useProfiles';
+import { useDisplays } from './hooks/useDisplays';
+import { useLayoutBoxes, addBoxSteps, updateBoxRect, deleteBox } from './hooks/useLayoutBoxes';
 import { ProfileList } from './components/ProfileList';
 import { StepList } from './components/StepList';
 import { StepEditorForm } from './components/StepEditorForm';
 import { LayoutCanvas } from './components/layout/LayoutCanvas';
 import { WindowBox } from './components/layout/WindowBox';
-import type { Step, RunResult, NormalizedRect } from '../shared/types';
-
-const DEFAULT_BOX_RECT: NormalizedRect = { x: 0.2, y: 0.2, width: 0.3, height: 0.3 };
+import type { Step, RunResult } from '../shared/types';
 
 export function App() {
   const { profiles, loading, createProfile, deleteProfile, setSteps, updateProfile, runProfile } = useProfiles();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [runResult, setRunResult] = useState<RunResult | null>(null);
   const [running, setRunning] = useState(false);
-  // M10 prototype only: ephemeral per-display box, not yet wired to profile.steps (see M11).
-  const [demoBoxRects, setDemoBoxRects] = useState<Record<number, NormalizedRect>>({});
+  const [newBoxAppName, setNewBoxAppName] = useState('');
+  const [newBoxDisplayId, setNewBoxDisplayId] = useState<number | null>(null);
+  const displays = useDisplays();
 
   useEffect(() => {
     if (!selectedId && profiles.length > 0) setSelectedId(profiles[0].id);
@@ -25,6 +26,13 @@ export function App() {
   }, [profiles, selectedId]);
 
   const selected = profiles.find((p) => p.id === selectedId) ?? null;
+  const layoutBoxes = useLayoutBoxes(selected?.steps ?? []);
+
+  useEffect(() => {
+    if (newBoxDisplayId === null && displays.length > 0) {
+      setNewBoxDisplayId(displays[0].id);
+    }
+  }, [displays, newBoxDisplayId]);
 
   async function handleCreate(name: string) {
     await createProfile(name);
@@ -50,6 +58,14 @@ export function App() {
       }
     }
     await updateProfile(selected.id, { hotkey: hotkey || undefined });
+  }
+
+  function handleAddBox() {
+    if (!selected || !newBoxAppName.trim()) return;
+    const display = displays.find((d) => d.id === newBoxDisplayId) ?? displays[0];
+    if (!display) return;
+    handleStepsChange(addBoxSteps(selected.steps, display, newBoxAppName.trim()));
+    setNewBoxAppName('');
   }
 
   async function handleRun() {
@@ -89,19 +105,51 @@ export function App() {
             </div>
             <div className="layout-canvas-wrap">
               <h2>Screens</h2>
+              <div className="layout-canvas-toolbar">
+                <select
+                  value={newBoxDisplayId ?? ''}
+                  onChange={(e) => setNewBoxDisplayId(Number(e.target.value))}
+                >
+                  {displays.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.isPrimary ? 'Primary' : `Display ${d.id}`} ({d.bounds.width}x{d.bounds.height})
+                    </option>
+                  ))}
+                </select>
+                <input
+                  placeholder="App name"
+                  value={newBoxAppName}
+                  onChange={(e) => setNewBoxAppName(e.target.value)}
+                />
+                <button onClick={handleAddBox} disabled={!newBoxAppName.trim()}>
+                  Add window
+                </button>
+              </div>
               <LayoutCanvas
-                renderBoxes={(display, scale) => {
-                  const rect = demoBoxRects[display.id] ?? DEFAULT_BOX_RECT;
-                  return (
-                    <WindowBox
-                      rect={rect}
-                      parentWidth={display.bounds.width * scale}
-                      parentHeight={display.bounds.height * scale}
-                      label="demo box"
-                      onChange={(next) => setDemoBoxRects((prev) => ({ ...prev, [display.id]: next }))}
-                    />
-                  );
-                }}
+                displays={displays}
+                renderBoxes={(display, scale) => (
+                  <>
+                    {layoutBoxes
+                      .filter((box) => box.displayId === display.id)
+                      .map((box) => (
+                        <WindowBox
+                          key={box.groupId}
+                          rect={box.rect}
+                          parentWidth={display.bounds.width * scale}
+                          parentHeight={display.bounds.height * scale}
+                          label={box.label}
+                          onChange={(next) => {
+                            if (!selected) return;
+                            handleStepsChange(updateBoxRect(selected.steps, box.groupId, next));
+                          }}
+                          onDelete={() => {
+                            if (!selected) return;
+                            handleStepsChange(deleteBox(selected.steps, box.groupId));
+                          }}
+                        />
+                      ))}
+                  </>
+                )}
               />
             </div>
             <StepList steps={selected.steps} onChange={handleStepsChange} />

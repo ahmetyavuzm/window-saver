@@ -1,17 +1,15 @@
 import type { ReactNode } from 'react';
-import { useDisplays } from '../../hooks/useDisplays';
 import { DisplayFrame } from './DisplayFrame';
 import type { DisplayInfo } from '../../../shared/types';
 
 const CANVAS_MAX_WIDTH = 640;
 
 interface LayoutCanvasProps {
+  displays: DisplayInfo[];
   renderBoxes?: (display: DisplayInfo, scale: number) => ReactNode;
 }
 
-export function LayoutCanvas({ renderBoxes }: LayoutCanvasProps) {
-  const displays = useDisplays();
-
+export function LayoutCanvas({ displays, renderBoxes }: LayoutCanvasProps) {
   if (displays.length === 0) {
     return <div className="layout-canvas empty-state">Detecting displays…</div>;
   }

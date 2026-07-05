@@ -8,6 +8,45 @@ interface Props {
   onChange: (steps: Step[]) => void;
 }
 
+interface Unit {
+  id: string;
+  groupId?: string;
+  steps: Step[];
+}
+
+function getGroupId(step: Step): string | undefined {
+  return 'groupId' in step ? step.groupId : undefined;
+}
+
+// Steps sharing a groupId (a canvas box's launch+wait+position steps, see App.tsx)
+// are always created/persisted as a contiguous run, so a single left-to-right scan
+// is enough to cluster them — no separate grouping index is needed.
+function toUnits(steps: Step[]): Unit[] {
+  const units: Unit[] = [];
+  let i = 0;
+  while (i < steps.length) {
+    const gid = getGroupId(steps[i]);
+    if (gid) {
+      const groupSteps = [steps[i]];
+      let j = i + 1;
+      while (j < steps.length && getGroupId(steps[j]) === gid) {
+        groupSteps.push(steps[j]);
+        j++;
+      }
+      units.push({ id: gid, groupId: gid, steps: groupSteps });
+      i = j;
+    } else {
+      units.push({ id: steps[i].id, steps: [steps[i]] });
+      i++;
+    }
+  }
+  return units;
+}
+
+function fromUnits(units: Unit[]): Step[] {
+  return units.flatMap((u) => u.steps);
+}
+
 function summarize(step: Step): string {
   switch (step.type) {
     case 'launchApp':
@@ -35,14 +74,44 @@ function summarize(step: Step): string {
   }
 }
 
-function SortableStepCard({ step, onDelete }: { step: Step; onDelete: () => void }) {
-  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: step.id });
+function SortableUnitCard({ unit, onDelete }: { unit: Unit; onDelete: () => void }) {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: unit.id });
   const style = { transform: CSS.Transform.toString(transform), transition };
 
+  if (unit.steps.length === 1 && !unit.groupId) {
+    const step = unit.steps[0];
+    return (
+      <li ref={setNodeRef} style={style} {...attributes} {...listeners} className="step-card">
+        <span className="step-type">{step.type}</span>
+        <span className="step-summary">{summarize(step)}</span>
+        <button
+          className="delete-btn"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+        >
+          ×
+        </button>
+      </li>
+    );
+  }
+
+  // A grouped unit (a canvas box's steps) always moves/deletes as one block —
+  // its internal step order can't be split apart via this list.
   return (
-    <li ref={setNodeRef} style={style} {...attributes} {...listeners} className="step-card">
-      <span className="step-type">{step.type}</span>
-      <span className="step-summary">{summarize(step)}</span>
+    <li ref={setNodeRef} style={style} {...attributes} {...listeners} className="step-card step-group">
+      <div className="step-group-body">
+        <span className="step-type">group</span>
+        <ul className="step-group-steps">
+          {unit.steps.map((step) => (
+            <li key={step.id}>
+              <span className="step-type">{step.type}</span> {summarize(step)}
+            </li>
+          ))}
+        </ul>
+      </div>
       <button
         className="delete-btn"
         onPointerDown={(e) => e.stopPropagation()}
@@ -58,26 +127,29 @@ function SortableStepCard({ step, onDelete }: { step: Step; onDelete: () => void
 }
 
 export function StepList({ steps, onChange }: Props) {
+  const units = toUnits(steps);
+
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    const oldIndex = steps.findIndex((s) => s.id === active.id);
-    const newIndex = steps.findIndex((s) => s.id === over.id);
-    onChange(arrayMove(steps, oldIndex, newIndex));
+    const oldIndex = units.findIndex((u) => u.id === active.id);
+    const newIndex = units.findIndex((u) => u.id === over.id);
+    onChange(fromUnits(arrayMove(units, oldIndex, newIndex)));
   }
 
-  function handleDelete(id: string) {
-    onChange(steps.filter((s) => s.id !== id));
+  function handleDelete(unit: Unit) {
+    const idsToRemove = new Set(unit.steps.map((s) => s.id));
+    onChange(steps.filter((s) => !idsToRemove.has(s.id)));
   }
 
   return (
     <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-      <SortableContext items={steps.map((s) => s.id)} strategy={verticalListSortingStrategy}>
+      <SortableContext items={units.map((u) => u.id)} strategy={verticalListSortingStrategy}>
         <ul className="step-list">
-          {steps.map((step) => (
-            <SortableStepCard key={step.id} step={step} onDelete={() => handleDelete(step.id)} />
+          {units.map((unit) => (
+            <SortableUnitCard key={unit.id} unit={unit} onDelete={() => handleDelete(unit)} />
           ))}
-          {steps.length === 0 && <li className="empty">No steps yet — add one below.</li>}
+          {units.length === 0 && <li className="empty">No steps yet — add one below.</li>}
         </ul>
       </SortableContext>
     </DndContext>

@@ -72,3 +72,14 @@ body {
   color: white; font-size: 11px; font-weight: 600; pointer-events: none;
   text-align: center; padding: 2px 4px;
 }
+.window-box.selected { outline: 2px solid #ffd60a; }
+.window-box-delete {
+  position: absolute; top: 2px; right: 2px; background: rgba(0, 0, 0, 0.4); color: white;
+  border: none; border-radius: 3px; width: 16px; height: 16px; line-height: 1; cursor: pointer;
+}
+.step-group { align-items: flex-start; }
+.step-group-body { flex: 1; }
+.step-group-steps { list-style: none; padding: 0; margin: 4px 0 0; }
+.step-group-steps li { padding: 2px 0; color: #444; }
+.layout-canvas-toolbar { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
+.layout-canvas-toolbar input { padding: 4px 8px; }
