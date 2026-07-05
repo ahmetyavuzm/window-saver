@@ -14,8 +14,15 @@ function summarize(step: Step): string {
       return `Launch ${step.appName}`;
     case 'waitForWindow':
       return `Wait for ${step.appName} window`;
-    case 'positionWindow':
-      return `Position ${step.appName} → ${step.rectangleAction}`;
+    case 'positionWindow': {
+      const detail = [
+        step.windowTitle ? `"${step.windowTitle}"` : null,
+        step.spaceIndex !== undefined ? `space ${step.spaceIndex}` : null,
+      ]
+        .filter(Boolean)
+        .join(', ');
+      return `Position ${step.appName}${detail ? ` (${detail})` : ''} → ${step.rectangleAction}`;
+    }
     case 'openUrl':
       return `Open ${step.url} in ${step.browser}`;
     case 'openTerminal':

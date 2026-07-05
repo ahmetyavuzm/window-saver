@@ -1,5 +1,5 @@
 import type { Step, LogEntry } from '../../../shared/types.js';
-import { runAppleScript, toAppleScriptString } from '../applescript.js';
+import { runAppleScript, resolveProcessRef } from '../applescript.js';
 
 type WaitForWindowStep = Extract<Step, { type: 'waitForWindow' }>;
 
@@ -13,13 +13,14 @@ function sleep(ms: number): Promise<void> {
 export async function handleWaitForWindow(
   step: WaitForWindowStep,
 ): Promise<Omit<LogEntry, 'stepId' | 'timestamp'>> {
-  const appName = toAppleScriptString(step.appName);
   const timeoutMs = step.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const deadline = Date.now() + timeoutMs;
 
+  const processRef = await resolveProcessRef(step.appName);
+
   while (Date.now() < deadline) {
     try {
-      const script = `tell application "System Events" to count (every window of process "${appName}")`;
+      const script = `tell application "System Events" to count (every window of (${processRef}))`;
       const result = await runAppleScript(script);
       if (Number(result) > 0) {
         return { status: 'ok', message: `${step.appName} has a window` };

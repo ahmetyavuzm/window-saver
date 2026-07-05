@@ -1,7 +1,14 @@
 export type Step =
   | { type: 'launchApp'; id: string; appName: string; bundleId?: string; args?: string[] }
   | { type: 'waitForWindow'; id: string; appName: string; timeoutMs?: number }
-  | { type: 'positionWindow'; id: string; appName: string; rectangleAction: string }
+  | {
+      type: 'positionWindow';
+      id: string;
+      appName: string;
+      rectangleAction: string;
+      windowTitle?: string;
+      spaceIndex?: number;
+    }
   | {
       type: 'openUrl';
       id: string;

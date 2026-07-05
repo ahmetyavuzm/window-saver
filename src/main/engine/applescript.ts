@@ -15,3 +15,21 @@ export async function runAppleScript(script: string): Promise<string> {
 export async function runShell(command: string, args: string[]): Promise<void> {
   await execFileAsync(command, args);
 }
+
+// System Events registers a running app under its executable's process name,
+// which often differs from the display name used to launch it (e.g.
+// "Visual Studio Code" runs as process "Code"). Resolving the bundle
+// identifier lets callers reference the process reliably regardless of that
+// naming mismatch.
+export async function resolveProcessRef(appName: string): Promise<string> {
+  const escapedName = toAppleScriptString(appName);
+  try {
+    const bundleId = await runAppleScript(`id of application "${escapedName}"`);
+    if (bundleId) {
+      return `first process whose bundle identifier is "${toAppleScriptString(bundleId)}"`;
+    }
+  } catch {
+    // fall back to name-based matching below
+  }
+  return `process "${escapedName}"`;
+}

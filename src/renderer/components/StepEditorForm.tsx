@@ -28,6 +28,8 @@ export function StepEditorForm({ onAdd }: Props) {
   const [type, setType] = useState<StepType>('launchApp');
   const [appName, setAppName] = useState('');
   const [rectangleAction, setRectangleAction] = useState(RECTANGLE_ACTIONS[0]);
+  const [windowTitle, setWindowTitle] = useState('');
+  const [spaceIndex, setSpaceIndex] = useState('');
   const [url, setUrl] = useState('');
   const [browser, setBrowser] = useState<'default' | 'Google Chrome' | 'Safari' | 'Arc'>('default');
   const [cwd, setCwd] = useState('');
@@ -45,7 +47,14 @@ export function StepEditorForm({ onAdd }: Props) {
         steps.push({ type: 'waitForWindow', id: newId(), appName, timeoutMs: 8000 });
       }
     } else if (type === 'positionWindow') {
-      steps.push({ type: 'positionWindow', id: newId(), appName, rectangleAction });
+      steps.push({
+        type: 'positionWindow',
+        id: newId(),
+        appName,
+        rectangleAction,
+        windowTitle: windowTitle || undefined,
+        spaceIndex: spaceIndex ? Number(spaceIndex) : undefined,
+      });
     } else if (type === 'openUrl') {
       steps.push({ type: 'openUrl', id: newId(), url, browser });
     } else if (type === 'openTerminal') {
@@ -59,6 +68,8 @@ export function StepEditorForm({ onAdd }: Props) {
     setUrl('');
     setCwd('');
     setCommand('');
+    setWindowTitle('');
+    setSpaceIndex('');
   }
 
   return (
@@ -91,6 +102,18 @@ export function StepEditorForm({ onAdd }: Props) {
               </option>
             ))}
           </select>
+          <input
+            placeholder="Window title contains (optional, for multi-window apps)"
+            value={windowTitle}
+            onChange={(e) => setWindowTitle(e.target.value)}
+          />
+          <input
+            type="number"
+            min={1}
+            placeholder="Move to desktop/Space # (optional)"
+            value={spaceIndex}
+            onChange={(e) => setSpaceIndex(e.target.value)}
+          />
         </>
       )}
 

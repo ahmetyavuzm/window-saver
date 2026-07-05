@@ -20,9 +20,7 @@ export function App() {
 
   const selected = profiles.find((p) => p.id === selectedId) ?? null;
 
-  async function handleCreate() {
-    const name = window.prompt('Profile name?');
-    if (!name) return;
+  async function handleCreate(name: string) {
     await createProfile(name);
   }
 

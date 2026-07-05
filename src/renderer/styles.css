@@ -16,6 +16,7 @@ body {
   padding: 12px;
 }
 .profile-list-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.new-profile-input { width: 100%; padding: 4px 8px; margin-bottom: 8px; }
 .profile-list h2 { font-size: 13px; margin: 0; }
 .profile-list ul { list-style: none; padding: 0; margin: 0; flex: 1; overflow-y: auto; }
 .profile-list li {
