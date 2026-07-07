@@ -109,10 +109,15 @@ input:focus, select:focus {
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  padding: 12px;
+  /* Extra top padding clears the inset traffic-light buttons (hiddenInset). */
+  padding: 32px 12px 12px;
   transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
 }
-.profile-list-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.profile-list-header {
+  display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;
+  -webkit-app-region: drag;
+}
+.profile-list-header button { -webkit-app-region: no-drag; }
 .profile-list-header button { padding: 4px 10px; font-size: 12px; }
 .new-profile-input { width: 100%; margin-bottom: 8px; }
 .profile-list h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); margin: 0; }

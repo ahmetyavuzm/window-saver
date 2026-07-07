@@ -1,8 +1,15 @@
-import { BrowserWindow } from 'electron';
+import { BrowserWindow, nativeTheme } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Match the renderer's --bg token for the current OS appearance so the window
+// paints its final color before React mounts (no white flash). The renderer
+// still drives the actual theme via data-theme once loaded.
+function editorBackgroundColor(): string {
+  return nativeTheme.shouldUseDarkColors ? '#1c1c1e' : '#f5f5f7';
+}
 
 let editorWindow: BrowserWindow | null = null;
 let onboardingWindow: BrowserWindow | null = null;
@@ -51,6 +58,8 @@ export function showEditorWindow(): BrowserWindow {
     width: 900,
     height: 640,
     title: 'Window Saver — Manage Profiles',
+    backgroundColor: editorBackgroundColor(),
+    titleBarStyle: 'hiddenInset',
     webPreferences: {
       preload: path.join(__dirname, '..', 'preload', 'index.cjs'),
       contextIsolation: true,
