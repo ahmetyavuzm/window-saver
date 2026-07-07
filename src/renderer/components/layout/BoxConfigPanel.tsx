@@ -9,9 +9,21 @@ interface Props {
   onSave: (config: BoxConfig) => void;
   onCancel: () => void;
   onDelete?: () => void;
+  // Desktop (yabai Space) assignment — only supplied when editing an existing box.
+  desktops?: number[];
+  desktop?: number;
+  onDesktopChange?: (desktop: number) => void;
 }
 
-export function BoxConfigPanel({ initial, onSave, onCancel, onDelete }: Props) {
+export function BoxConfigPanel({
+  initial,
+  onSave,
+  onCancel,
+  onDelete,
+  desktops,
+  desktop,
+  onDesktopChange,
+}: Props) {
   const [kind, setKind] = useState<BoxKind>(initial.kind);
   const [launchApp, setLaunchApp] = useState<LaunchAppValue>({
     appName: initial.appName ?? '',
@@ -49,6 +61,18 @@ export function BoxConfigPanel({ initial, onSave, onCancel, onDelete }: Props) {
         {kind === 'launchApp' && <LaunchAppFields value={launchApp} onChange={setLaunchApp} />}
         {kind === 'openUrl' && <OpenUrlFields value={openUrl} onChange={setOpenUrl} allowDefaultBrowser={false} />}
         {kind === 'openTerminal' && <OpenTerminalFields value={openTerminal} onChange={setOpenTerminal} />}
+        {desktops && desktop !== undefined && onDesktopChange && (
+          <label className="box-config-desktop">
+            Desktop
+            <select value={desktop} onChange={(e) => onDesktopChange(Number(e.target.value))}>
+              {desktops.map((d) => (
+                <option key={d} value={d}>
+                  Desktop {d}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <div className="box-config-actions">
           {onDelete && (
             <button type="button" className="box-config-delete" onClick={onDelete}>

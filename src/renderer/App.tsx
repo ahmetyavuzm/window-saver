@@ -7,6 +7,7 @@ import {
   createBoxSteps,
   updateBoxConfig,
   updateBoxRect,
+  updateBoxSpace,
   deleteBox,
   type BoxConfig,
 } from './hooks/useLayoutBoxes';
@@ -33,6 +34,7 @@ interface ConfigTarget {
   groupId: string | null; // null = creating a new box
   display: DisplayInfo;
   config: BoxConfig;
+  spaceIndex?: number; // current desktop of an existing box
 }
 
 export function App() {
@@ -235,7 +237,14 @@ export function App() {
                           parentWidth={display.workArea.width * scale}
                           parentHeight={display.workArea.height * scale}
                           label={box.label}
-                          onClick={() => setConfigTarget({ groupId: box.groupId, display, config: box.config })}
+                          onClick={() =>
+                            setConfigTarget({
+                              groupId: box.groupId,
+                              display,
+                              config: box.config,
+                              spaceIndex: box.spaceIndex,
+                            })
+                          }
                           onChange={(next) => {
                             if (!selected) return;
                             handleStepsChange(updateBoxRect(selected.steps, box.groupId, next));
@@ -261,6 +270,17 @@ export function App() {
                         if (!selected || !configTarget.groupId) return;
                         handleStepsChange(deleteBox(selected.steps, configTarget.groupId));
                         setConfigTarget(null);
+                      }
+                    : undefined
+                }
+                desktops={configTarget.groupId ? desktops : undefined}
+                desktop={configTarget.groupId ? boxDesktop(configTarget.spaceIndex) : undefined}
+                onDesktopChange={
+                  configTarget.groupId
+                    ? (d) => {
+                        if (!selected || !configTarget.groupId) return;
+                        handleStepsChange(updateBoxSpace(selected.steps, configTarget.groupId, d === 1 ? undefined : d));
+                        setConfigTarget((prev) => (prev ? { ...prev, spaceIndex: d === 1 ? undefined : d } : prev));
                       }
                     : undefined
                 }

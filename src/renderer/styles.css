@@ -255,6 +255,8 @@ input:focus, select:focus {
   animation: panel-pop var(--dur) var(--ease);
 }
 .box-config-panel h3 { margin: 0 0 4px; font-size: 14px; }
+.box-config-desktop { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted); }
+.box-config-desktop select { margin-left: auto; }
 .box-config-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
 .box-config-actions button:last-child { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
 .box-config-actions button:last-child:hover { background: var(--accent-hover); }
