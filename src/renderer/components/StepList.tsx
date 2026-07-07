@@ -56,7 +56,7 @@ function summarize(step: Step): string {
     case 'positionWindow': {
       const detail = [
         step.windowTitle ? `"${step.windowTitle}"` : null,
-        step.spaceIndex !== undefined ? `space ${step.spaceIndex}` : null,
+        step.desktopIndex !== undefined ? `desktop ${step.desktopIndex}` : null,
       ]
         .filter(Boolean)
         .join(', ');

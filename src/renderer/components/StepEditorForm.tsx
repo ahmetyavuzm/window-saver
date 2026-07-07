@@ -32,7 +32,7 @@ export function StepEditorForm({ onAdd }: Props) {
   const [appName, setAppName] = useState('');
   const [rectangleAction, setRectangleAction] = useState(RECTANGLE_ACTIONS[0]);
   const [windowTitle, setWindowTitle] = useState('');
-  const [spaceIndex, setSpaceIndex] = useState('');
+  const [desktopIndex, setDesktopIndex] = useState('');
   const [ms, setMs] = useState(1000);
   const [launchApp, setLaunchApp] = useState<LaunchAppValue>({ appName: '', autoInsertWait: true });
   const [openUrl, setOpenUrl] = useState<OpenUrlValue>({ url: '', browser: 'default' });
@@ -54,7 +54,7 @@ export function StepEditorForm({ onAdd }: Props) {
         appName,
         rectangleAction,
         windowTitle: windowTitle || undefined,
-        spaceIndex: spaceIndex ? Number(spaceIndex) : undefined,
+        desktopIndex: desktopIndex ? Number(desktopIndex) : undefined,
       });
     } else if (type === 'openUrl') {
       steps.push({ type: 'openUrl', id: newId(), url: openUrl.url, browser: openUrl.browser });
@@ -76,7 +76,7 @@ export function StepEditorForm({ onAdd }: Props) {
     setOpenUrl({ url: '', browser: 'default' });
     setOpenTerminal({ cwd: '', command: '' });
     setWindowTitle('');
-    setSpaceIndex('');
+    setDesktopIndex('');
   }
 
   return (
@@ -109,9 +109,9 @@ export function StepEditorForm({ onAdd }: Props) {
           <input
             type="number"
             min={1}
-            placeholder="Move to desktop/Space # (optional)"
-            value={spaceIndex}
-            onChange={(e) => setSpaceIndex(e.target.value)}
+            placeholder="Desktop # on its screen (optional)"
+            value={desktopIndex}
+            onChange={(e) => setDesktopIndex(e.target.value)}
           />
         </>
       )}

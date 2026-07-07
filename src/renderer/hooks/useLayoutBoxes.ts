@@ -20,7 +20,7 @@ export interface LayoutBox {
   rect: NormalizedRect;
   label: string;
   config: BoxConfig;
-  spaceIndex?: number; // yabai Space (macOS desktop); undefined = current desktop
+  desktopIndex?: number; // desktop within this box's display; undefined/1 = current desktop
 }
 
 function labelFor(config: BoxConfig): string {
@@ -116,7 +116,7 @@ export function deriveBoxes(steps: Step[]): LayoutBox[] {
       rect: posStep.placement.rect,
       label: labelFor(finalConfig),
       config: finalConfig,
-      spaceIndex: posStep.spaceIndex,
+      desktopIndex: posStep.desktopIndex,
     });
   }
   return boxes;
@@ -138,7 +138,7 @@ export function createBoxSteps(
   steps: Step[],
   display: DisplayInfo,
   config: BoxConfig,
-  spaceIndex?: number,
+  desktopIndex?: number,
 ): Step[] {
   const groupId = newGroupId();
   const built = buildKindSteps(groupId, config);
@@ -150,7 +150,7 @@ export function createBoxSteps(
       display: { displayId: display.id, widthPx: display.bounds.width, heightPx: display.bounds.height },
       rect: DEFAULT_BOX_RECT,
     },
-    ...(spaceIndex !== undefined ? { spaceIndex } : {}),
+    ...(desktopIndex !== undefined ? { desktopIndex } : {}),
     groupId,
   };
   return [...steps, ...built, positionStep];
@@ -180,14 +180,14 @@ export function updateBoxRect(steps: Step[], groupId: string, rect: NormalizedRe
   });
 }
 
-// Assign the box's window to a macOS desktop (yabai Space). Passing undefined
+// Assign the box's window to a desktop within its own display. Passing undefined
 // clears the assignment (window stays on whatever desktop is current at run).
-export function updateBoxSpace(steps: Step[], groupId: string, spaceIndex: number | undefined): Step[] {
+export function updateBoxDesktop(steps: Step[], groupId: string, desktopIndex: number | undefined): Step[] {
   return steps.map((step) => {
     if (step.type !== 'positionWindow' || step.groupId !== groupId) return step;
     const next = { ...step };
-    if (spaceIndex === undefined) delete next.spaceIndex;
-    else next.spaceIndex = spaceIndex;
+    if (desktopIndex === undefined) delete next.desktopIndex;
+    else next.desktopIndex = desktopIndex;
     return next;
   });
 }
