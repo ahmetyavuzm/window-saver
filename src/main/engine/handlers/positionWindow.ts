@@ -1,7 +1,12 @@
 import { screen } from 'electron';
 import type { Step, LogEntry } from '../../../shared/types.js';
 import { runAppleScript, runJXA, resolveProcessRef, toAppleScriptString } from '../applescript.js';
-import { isYabaiAvailable, ensureSpaceCount, moveFocusedWindowToSpace, YABAI_MISSING_MESSAGE } from '../yabai.js';
+import {
+  isYabaiAvailable,
+  resolveDisplaySpaceIndex,
+  moveFocusedWindowToSpace,
+  YABAI_MISSING_MESSAGE,
+} from '../yabai.js';
 import { computeTargetBounds, resolveDisplayForPlacement, boundsFromNormalizedRect } from '../geometry.js';
 
 type PositionWindowStep = Extract<Step, { type: 'positionWindow' }>;
@@ -10,6 +15,28 @@ type StepLog = Omit<LogEntry, 'stepId' | 'timestamp'>;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// True when this step asks to move the window to a non-default desktop. Desktop
+// 1 (or unset) means "leave it on the display's current Space" — no yabai move.
+function wantsDesktopMove(step: PositionWindowStep): boolean {
+  return step.desktopIndex !== undefined && step.desktopIndex > 1;
+}
+
+// Origin of the display this step targets — used to match the box's display to a
+// yabai display (which numbers Spaces globally, per display) at run time.
+function displayOriginForStep(step: PositionWindowStep): { x: number; y: number } {
+  const display = step.placement
+    ? resolveDisplayForPlacement(step.placement.display).display
+    : screen.getPrimaryDisplay();
+  return { x: display.bounds.x, y: display.bounds.y };
+}
+
+function notEnoughDesktopsMessage(desktopIndex: number): string {
+  return (
+    `Bu ekranda ${desktopIndex}. masaüstü bulunmuyor. Mission Control'den (Ctrl+Yukarı Ok) ` +
+    'o ekrana yeterli sayıda masaüstü ekleyip tekrar deneyin.'
+  );
 }
 
 // Terminal windows can't be a target here through System Events: Terminal
@@ -117,7 +144,7 @@ async function positionTerminal(step: PositionWindowStep, knownWindowId?: number
   }
   const winRef = `window id ${windowId}`;
 
-  if (step.spaceIndex !== undefined) {
+  if (wantsDesktopMove(step)) {
     if (!(await isYabaiAvailable())) {
       return { status: 'error', message: YABAI_MISSING_MESSAGE };
     }
@@ -131,8 +158,11 @@ async function positionTerminal(step: PositionWindowStep, knownWindowId?: number
       end tell
     `);
     await sleep(200);
-    await ensureSpaceCount(step.spaceIndex);
-    await moveFocusedWindowToSpace(step.spaceIndex);
+    const globalSpace = await resolveDisplaySpaceIndex(displayOriginForStep(step), step.desktopIndex!);
+    if (globalSpace === null) {
+      return { status: 'error', message: notEnoughDesktopsMessage(step.desktopIndex!) };
+    }
+    await moveFocusedWindowToSpace(globalSpace);
     await sleep(300);
   }
 
@@ -150,7 +180,7 @@ async function positionTerminal(step: PositionWindowStep, knownWindowId?: number
 
   return successMessage(
     step,
-    [step.spaceIndex !== undefined ? `space ${step.spaceIndex}` : null, fallbackReason ?? null],
+    [wantsDesktopMove(step) ? `desktop ${step.desktopIndex}` : null, fallbackReason ?? null],
     actionLabel,
   );
 }
@@ -210,12 +240,15 @@ async function positionGeneric(step: PositionWindowStep): Promise<StepLog> {
     await sleep(200);
   }
 
-  if (step.spaceIndex !== undefined) {
+  if (wantsDesktopMove(step)) {
     if (!(await isYabaiAvailable())) {
       return { status: 'error', message: YABAI_MISSING_MESSAGE };
     }
-    await ensureSpaceCount(step.spaceIndex);
-    await moveFocusedWindowToSpace(step.spaceIndex);
+    const globalSpace = await resolveDisplaySpaceIndex(displayOriginForStep(step), step.desktopIndex!);
+    if (globalSpace === null) {
+      return { status: 'error', message: notEnoughDesktopsMessage(step.desktopIndex!) };
+    }
+    await moveFocusedWindowToSpace(globalSpace);
     await sleep(300);
   }
 
@@ -226,7 +259,7 @@ async function positionGeneric(step: PositionWindowStep): Promise<StepLog> {
     step,
     [
       step.windowTitle ? `window "${step.windowTitle}"` : null,
-      step.spaceIndex !== undefined ? `space ${step.spaceIndex}` : null,
+      wantsDesktopMove(step) ? `desktop ${step.desktopIndex}` : null,
       fallbackReason ?? null,
     ],
     actionLabel,
