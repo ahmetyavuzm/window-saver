@@ -16,6 +16,7 @@ import { StepEditorForm } from './components/StepEditorForm';
 import { LayoutCanvas } from './components/layout/LayoutCanvas';
 import { WindowBox } from './components/layout/WindowBox';
 import { BoxConfigPanel } from './components/layout/BoxConfigPanel';
+import { SettingsPanel } from './components/settings/SettingsPanel';
 import type { Step, RunResult, DisplayInfo } from '../shared/types';
 
 const DEFAULT_NEW_BOX_CONFIG: BoxConfig = { kind: 'launchApp', appName: '', autoInsertWait: true };
@@ -36,6 +37,7 @@ export function App() {
   const [hasTrackedTargets, setHasTrackedTargets] = useState(false);
   const [newBoxDisplayId, setNewBoxDisplayId] = useState<number | null>(null);
   const [configTarget, setConfigTarget] = useState<ConfigTarget | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const displays = useDisplays();
   const { settings, updateSettings } = useSettings();
 
@@ -142,6 +144,7 @@ export function App() {
         onSelect={setSelectedId}
         onCreate={handleCreate}
         onDelete={deleteProfile}
+        onOpenSettings={() => setSettingsOpen(true)}
       />
       <div className="main-pane">
         {selected ? (
@@ -243,6 +246,13 @@ export function App() {
           <div className="empty-state">Select or create a profile to get started.</div>
         )}
       </div>
+      {settingsOpen && settings && (
+        <SettingsPanel
+          settings={{ theme: settings.theme, accentColor: settings.accentColor }}
+          onUpdate={(partial) => void updateSettings(partial)}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
     </div>
   );
 }

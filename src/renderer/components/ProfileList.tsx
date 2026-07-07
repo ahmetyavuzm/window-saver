@@ -7,9 +7,10 @@ interface Props {
   onSelect: (id: string) => void;
   onCreate: (name: string) => void;
   onDelete: (id: string) => void;
+  onOpenSettings: () => void;
 }
 
-export function ProfileList({ profiles, selectedId, onSelect, onCreate, onDelete }: Props) {
+export function ProfileList({ profiles, selectedId, onSelect, onCreate, onDelete, onOpenSettings }: Props) {
   const [adding, setAdding] = useState(false);
   const [draftName, setDraftName] = useState('');
 
@@ -64,6 +65,9 @@ export function ProfileList({ profiles, selectedId, onSelect, onCreate, onDelete
         ))}
         {profiles.length === 0 && <li className="empty">No profiles yet</li>}
       </ul>
+      <button className="settings-trigger" onClick={onOpenSettings}>
+        <span className="settings-gear" aria-hidden="true">⚙</span> Settings
+      </button>
     </div>
   );
 }
