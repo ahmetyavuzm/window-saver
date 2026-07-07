@@ -20,6 +20,7 @@ export interface LayoutBox {
   rect: NormalizedRect;
   label: string;
   config: BoxConfig;
+  spaceIndex?: number; // yabai Space (macOS desktop); undefined = current desktop
 }
 
 function labelFor(config: BoxConfig): string {
@@ -115,6 +116,7 @@ export function deriveBoxes(steps: Step[]): LayoutBox[] {
       rect: posStep.placement.rect,
       label: labelFor(finalConfig),
       config: finalConfig,
+      spaceIndex: posStep.spaceIndex,
     });
   }
   return boxes;
@@ -132,7 +134,12 @@ function newGroupId(): string {
 
 const DEFAULT_BOX_RECT: NormalizedRect = { x: 0.2, y: 0.2, width: 0.3, height: 0.3 };
 
-export function createBoxSteps(steps: Step[], display: DisplayInfo, config: BoxConfig): Step[] {
+export function createBoxSteps(
+  steps: Step[],
+  display: DisplayInfo,
+  config: BoxConfig,
+  spaceIndex?: number,
+): Step[] {
   const groupId = newGroupId();
   const built = buildKindSteps(groupId, config);
   const positionStep: Step = {
@@ -143,6 +150,7 @@ export function createBoxSteps(steps: Step[], display: DisplayInfo, config: BoxC
       display: { displayId: display.id, widthPx: display.bounds.width, heightPx: display.bounds.height },
       rect: DEFAULT_BOX_RECT,
     },
+    ...(spaceIndex !== undefined ? { spaceIndex } : {}),
     groupId,
   };
   return [...steps, ...built, positionStep];
@@ -169,6 +177,18 @@ export function updateBoxRect(steps: Step[], groupId: string, rect: NormalizedRe
   return steps.map((step) => {
     if (step.type !== 'positionWindow' || step.groupId !== groupId || !step.placement) return step;
     return { ...step, placement: { ...step.placement, rect } };
+  });
+}
+
+// Assign the box's window to a macOS desktop (yabai Space). Passing undefined
+// clears the assignment (window stays on whatever desktop is current at run).
+export function updateBoxSpace(steps: Step[], groupId: string, spaceIndex: number | undefined): Step[] {
+  return steps.map((step) => {
+    if (step.type !== 'positionWindow' || step.groupId !== groupId) return step;
+    const next = { ...step };
+    if (spaceIndex === undefined) delete next.spaceIndex;
+    else next.spaceIndex = spaceIndex;
+    return next;
   });
 }
 
