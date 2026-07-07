@@ -16,10 +16,18 @@ import { StepEditorForm } from './components/StepEditorForm';
 import { LayoutCanvas } from './components/layout/LayoutCanvas';
 import { WindowBox } from './components/layout/WindowBox';
 import { BoxConfigPanel } from './components/layout/BoxConfigPanel';
+import { DesktopTabs, type DesktopSelection } from './components/layout/DesktopTabs';
 import { SettingsPanel } from './components/settings/SettingsPanel';
 import type { Step, RunResult, DisplayInfo } from '../shared/types';
 
 const DEFAULT_NEW_BOX_CONFIG: BoxConfig = { kind: 'launchApp', appName: '', autoInsertWait: true };
+
+// Desktop 1 is the default (no yabai Space move → undefined); Desktop N>1 maps
+// to yabai Space N. "All" creates boxes on the default desktop.
+function desktopToSpaceIndex(d: DesktopSelection): number | undefined {
+  return d === 'all' || d === 1 ? undefined : d;
+}
+const boxDesktop = (spaceIndex?: number): number => spaceIndex ?? 1;
 
 interface ConfigTarget {
   groupId: string | null; // null = creating a new box
@@ -38,6 +46,8 @@ export function App() {
   const [newBoxDisplayId, setNewBoxDisplayId] = useState<number | null>(null);
   const [configTarget, setConfigTarget] = useState<ConfigTarget | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [activeDesktop, setActiveDesktop] = useState<DesktopSelection>(1);
+  const [addedDesktops, setAddedDesktops] = useState(1); // highest empty desktop the user added
   const displays = useDisplays();
   const { settings, updateSettings } = useSettings();
 
@@ -53,10 +63,25 @@ export function App() {
     // renderer-side flag must reset on profile switch so Close doesn't
     // linger for a profile that was never run in this session.
     setHasTrackedTargets(false);
+    // Desktop view is per-profile; reset it when switching.
+    setActiveDesktop(1);
+    setAddedDesktops(1);
   }, [selectedId]);
 
   const selected = profiles.find((p) => p.id === selectedId) ?? null;
   const layoutBoxes = useLayoutBoxes(selected?.steps ?? []);
+
+  // Desktops shown as tabs: 1..max(used by boxes, user-added empty tabs).
+  const maxDesktop = Math.max(
+    addedDesktops,
+    ...layoutBoxes.map((b) => boxDesktop(b.spaceIndex)),
+    typeof activeDesktop === 'number' ? activeDesktop : 1,
+  );
+  const desktops = Array.from({ length: maxDesktop }, (_, i) => i + 1);
+  const visibleBoxes =
+    activeDesktop === 'all'
+      ? layoutBoxes
+      : layoutBoxes.filter((b) => boxDesktop(b.spaceIndex) === activeDesktop);
 
   useEffect(() => {
     if (newBoxDisplayId === null && displays.length > 0) {
@@ -99,11 +124,19 @@ export function App() {
   function handleSaveConfig(config: BoxConfig) {
     if (!selected || !configTarget) return;
     if (configTarget.groupId === null) {
-      handleStepsChange(createBoxSteps(selected.steps, configTarget.display, config));
+      // New boxes inherit the desktop whose tab is active.
+      const spaceIndex = desktopToSpaceIndex(activeDesktop);
+      handleStepsChange(createBoxSteps(selected.steps, configTarget.display, config, spaceIndex));
     } else {
       handleStepsChange(updateBoxConfig(selected.steps, configTarget.groupId, config));
     }
     setConfigTarget(null);
+  }
+
+  function handleAddDesktop() {
+    const next = maxDesktop + 1;
+    setAddedDesktops(next);
+    setActiveDesktop(next);
   }
 
   async function handleRun() {
@@ -168,6 +201,12 @@ export function App() {
             </div>
             <div className="layout-canvas-wrap">
               <h2>Screens</h2>
+              <DesktopTabs
+                desktops={desktops}
+                active={activeDesktop}
+                onSelect={setActiveDesktop}
+                onAdd={handleAddDesktop}
+              />
               <div className="layout-canvas-toolbar">
                 <select
                   value={newBoxDisplayId ?? ''}
@@ -187,7 +226,7 @@ export function App() {
                 displays={displays}
                 renderBoxes={(display, scale) => (
                   <>
-                    {layoutBoxes
+                    {visibleBoxes
                       .filter((box) => box.displayId === display.id)
                       .map((box) => (
                         <WindowBox
