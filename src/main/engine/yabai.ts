@@ -14,6 +14,12 @@ interface YabaiDisplay {
   spaces: number[]; // global Space indices on this display, in order
 }
 
+interface YabaiSpace {
+  index: number; // global Space index
+  display: number; // yabai display index this Space belongs to
+  'is-native-fullscreen': boolean;
+}
+
 async function runYabai(args: string[]): Promise<string> {
   const { stdout } = await execFileAsync('yabai', ['-m', ...args]);
   return stdout.trim();
@@ -33,6 +39,11 @@ export async function queryDisplays(): Promise<YabaiDisplay[]> {
   return JSON.parse(stdout) as YabaiDisplay[];
 }
 
+export async function querySpaces(): Promise<YabaiSpace[]> {
+  const stdout = await runYabai(['query', '--spaces']);
+  return JSON.parse(stdout) as YabaiSpace[];
+}
+
 /**
  * Translate a per-display desktop into yabai's current global Space index.
  *
@@ -40,7 +51,12 @@ export async function queryDisplays(): Promise<YabaiDisplay[]> {
  * then display 2's, …), so the same "2nd desktop of this screen" maps to a
  * different global index whenever desktops/displays change. We therefore resolve
  * it fresh at run time: match the box's display to a yabai display by frame
- * origin, then index into that display's ordered `spaces` array.
+ * origin, then index into that display's ordered list of *regular* desktops.
+ *
+ * Native-fullscreen apps occupy their own macOS Space, which yabai lists among
+ * a display's `spaces`. Those are not desktops the user arranges windows on, so
+ * we exclude them (`is-native-fullscreen`) before indexing — otherwise a
+ * fullscreen app sitting between desktops would shift every desktop after it.
  *
  * Returns the global Space index, or `null` when the display can't be matched
  * (yabai down / arrangement changed) or it has fewer than `localDesktop`
@@ -50,7 +66,7 @@ export async function resolveDisplaySpaceIndex(
   displayBounds: { x: number; y: number },
   localDesktop: number,
 ): Promise<number | null> {
-  const displays = await queryDisplays();
+  const [displays, spaces] = await Promise.all([queryDisplays(), querySpaces()]);
   if (displays.length === 0) return null;
 
   const targetX = Math.round(displayBounds.x);
@@ -66,8 +82,16 @@ export async function resolveDisplaySpaceIndex(
       return dist < bestDist ? d : best;
     }, displays[0]);
 
-  if (localDesktop < 1 || localDesktop > match.spaces.length) return null;
-  return match.spaces[localDesktop - 1];
+  // Regular (non-fullscreen) desktops on the matched display, in order. Fall
+  // back to the display's raw `spaces` if the spaces query came back empty.
+  const regular = spaces
+    .filter((s) => s.display === match.index && !s['is-native-fullscreen'])
+    .map((s) => s.index)
+    .sort((a, b) => a - b);
+  const ordered = regular.length > 0 ? regular : match.spaces;
+
+  if (localDesktop < 1 || localDesktop > ordered.length) return null;
+  return ordered[localDesktop - 1];
 }
 
 function isBenignYabaiNoop(error: unknown): boolean {
