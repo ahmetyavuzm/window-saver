@@ -28,6 +28,7 @@ export interface WindowSaverApi {
   getSettings(): Promise<Settings>;
   updateSettings(partial: Partial<UserSettings>): Promise<Settings>;
   listDisplays(): Promise<DisplayInfo[]>;
+  isYabaiAvailable(): Promise<boolean>;
   onDisplaysChanged(cb: (displays: DisplayInfo[]) => void): () => void;
 }
 

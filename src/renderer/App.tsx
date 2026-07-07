@@ -50,8 +50,13 @@ export function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [activeDesktop, setActiveDesktop] = useState<DesktopSelection>(1);
   const [addedDesktops, setAddedDesktops] = useState(1); // highest empty desktop the user added
+  const [yabaiAvailable, setYabaiAvailable] = useState<boolean | null>(null);
   const displays = useDisplays();
   const { settings, updateSettings } = useSettings();
+
+  useEffect(() => {
+    void window.windowSaver.isYabaiAvailable().then(setYabaiAvailable);
+  }, []);
 
   useEffect(() => {
     if (!selectedId && profiles.length > 0) setSelectedId(profiles[0].id);
@@ -84,6 +89,10 @@ export function App() {
     activeDesktop === 'all'
       ? layoutBoxes
       : layoutBoxes.filter((b) => boxDesktop(b.spaceIndex) === activeDesktop);
+
+  // Multi-desktop needs yabai; warn only when the profile actually uses it.
+  const usesMultiDesktop = maxDesktop > 1 || layoutBoxes.some((b) => boxDesktop(b.spaceIndex) > 1);
+  const showYabaiWarning = yabaiAvailable === false && usesMultiDesktop;
 
   useEffect(() => {
     if (newBoxDisplayId === null && displays.length > 0) {
@@ -209,6 +218,12 @@ export function App() {
                 onSelect={setActiveDesktop}
                 onAdd={handleAddDesktop}
               />
+              {showYabaiWarning && (
+                <div className="yabai-banner" role="alert">
+                  Multi-desktop placement needs <strong>yabai</strong>. Install it and grant Accessibility,
+                  or these windows will stay on the current desktop.
+                </div>
+              )}
               <div className="layout-canvas-toolbar">
                 <select
                   value={newBoxDisplayId ?? ''}

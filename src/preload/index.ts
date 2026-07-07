@@ -32,6 +32,7 @@ const api = {
   updateSettings: (partial: Partial<UserSettings>): Promise<Settings> =>
     ipcRenderer.invoke('settings:update', partial),
   listDisplays: (): Promise<DisplayInfo[]> => ipcRenderer.invoke('displays:list'),
+  isYabaiAvailable: (): Promise<boolean> => ipcRenderer.invoke('yabai:isAvailable'),
   onDisplaysChanged: (cb: (displays: DisplayInfo[]) => void): (() => void) => {
     const listener = (_event: unknown, displays: DisplayInfo[]) => cb(displays);
     ipcRenderer.on('displays:changed', listener);

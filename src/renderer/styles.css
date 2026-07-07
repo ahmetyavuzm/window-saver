@@ -193,6 +193,13 @@ input:focus, select:focus {
 .desktop-tab.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-ring); font-weight: 500; }
 .desktop-tab-add { color: var(--text-muted); font-size: 15px; line-height: 1; padding: 4px 10px; }
 
+.yabai-banner {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
+  color: var(--text); border-radius: var(--radius-sm); padding: 8px 12px; margin-bottom: 10px;
+  font-size: 12px; line-height: 1.4;
+}
+
 .layout-canvas-toolbar { display: flex; gap: 8px; margin-bottom: 10px; align-items: center; }
 .layout-canvas {
   background: var(--surface-3); border-radius: var(--radius);

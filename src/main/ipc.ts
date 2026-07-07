@@ -7,6 +7,7 @@ import { checkPermissions, PERMISSION_SETTINGS_URLS } from './permissions.js';
 import { listDisplays } from './displays.js';
 import * as registry from './engine/registry.js';
 import { terminateTarget } from './engine/terminate.js';
+import { isYabaiAvailable } from './engine/yabai.js';
 import type { Step, StopResult, UserSettings } from '../shared/types.js';
 
 function onProfilesChanged(): void {
@@ -72,4 +73,6 @@ export function registerIpcHandlers(): void {
   );
 
   ipcMain.handle('displays:list', () => listDisplays());
+
+  ipcMain.handle('yabai:isAvailable', () => isYabaiAvailable());
 }
