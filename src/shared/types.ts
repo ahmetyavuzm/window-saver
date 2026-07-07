@@ -161,6 +161,11 @@ export interface PermissionStatus {
   automation: boolean;
 }
 
+export interface YabaiInstallResult {
+  ok: boolean;
+  message: string;
+}
+
 export interface StopResultEntry {
   label: string;
   closed: boolean;

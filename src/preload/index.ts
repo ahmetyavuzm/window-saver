@@ -8,6 +8,7 @@ import type {
   Settings,
   UserSettings,
   CapturedWindow,
+  YabaiInstallResult,
 } from '../shared/types.js';
 
 const api = {
@@ -35,6 +36,7 @@ const api = {
   listDisplays: (): Promise<DisplayInfo[]> => ipcRenderer.invoke('displays:list'),
   listApps: (): Promise<string[]> => ipcRenderer.invoke('apps:list'),
   isYabaiAvailable: (): Promise<boolean> => ipcRenderer.invoke('yabai:isAvailable'),
+  installYabai: (): Promise<YabaiInstallResult> => ipcRenderer.invoke('yabai:install'),
   ensureDesktops: (
     displayBounds: { x: number; y: number },
     target: number,

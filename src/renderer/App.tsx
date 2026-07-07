@@ -56,6 +56,7 @@ export function App() {
   const [activeDesktopByDisplay, setActiveDesktopByDisplay] = useState<Record<number, DesktopSelection>>({});
   const [addedDesktopsByDisplay, setAddedDesktopsByDisplay] = useState<Record<number, number>>({});
   const [yabaiAvailable, setYabaiAvailable] = useState<boolean | null>(null);
+  const [installingYabai, setInstallingYabai] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [captureOpen, setCaptureOpen] = useState(false);
   const [installedApps, setInstalledApps] = useState<string[]>([]);
@@ -128,6 +129,17 @@ export function App() {
       setNewBoxDisplayId(displays[0].id);
     }
   }, [displays, newBoxDisplayId]);
+
+  async function handleInstallYabai() {
+    setInstallingYabai(true);
+    try {
+      const res = await window.windowSaver.installYabai();
+      setNotice(res.message);
+      if (res.ok) setYabaiAvailable(await window.windowSaver.isYabaiAvailable());
+    } finally {
+      setInstallingYabai(false);
+    }
+  }
 
   async function handleCreate(name: string) {
     await createProfile(name);
@@ -355,8 +367,13 @@ export function App() {
               <h2>Screens</h2>
               {showYabaiWarning && (
                 <div className="yabai-banner" role="alert">
-                  Multi-desktop placement needs <strong>yabai</strong>. Install it and grant Accessibility,
-                  or these windows will stay on the current desktop.
+                  <span>
+                    Multi-desktop placement needs <strong>yabai</strong>. Install it and grant Accessibility,
+                    or these windows will stay on the current desktop.
+                  </span>
+                  <button onClick={handleInstallYabai} disabled={installingYabai}>
+                    {installingYabai ? 'Installing…' : 'Install yabai'}
+                  </button>
                 </div>
               )}
               {desktopLayout === 'grid' ? (

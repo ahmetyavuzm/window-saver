@@ -8,7 +8,7 @@ import { listDisplays } from './displays.js';
 import { listInstalledApps } from './apps.js';
 import * as registry from './engine/registry.js';
 import { terminateTarget } from './engine/terminate.js';
-import { isYabaiAvailable, ensureSpacesOnDisplay } from './engine/yabai.js';
+import { isYabaiAvailable, installYabai, ensureSpacesOnDisplay } from './engine/yabai.js';
 import { createDesktopViaMissionControl } from './engine/missioncontrol.js';
 import { captureWindows, stepsFromCapturedWindows } from './engine/capture.js';
 import type { CapturedWindow, Step, StopResult, UserSettings } from '../shared/types.js';
@@ -81,6 +81,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('apps:list', () => listInstalledApps());
 
   ipcMain.handle('yabai:isAvailable', () => isYabaiAvailable());
+  ipcMain.handle('yabai:install', () => installYabai());
 
   ipcMain.handle(
     'desktops:ensureOnDisplay',

@@ -285,7 +285,9 @@ input:focus, select:focus {
   border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
   color: var(--text); border-radius: var(--radius-sm); padding: 8px 12px; margin-bottom: 10px;
   font-size: 12px; line-height: 1.4;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
 }
+.yabai-banner button { flex-shrink: 0; }
 
 .layout-canvas-toolbar { display: flex; gap: 8px; margin-bottom: 10px; align-items: center; }
 .layout-canvas {

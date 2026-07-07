@@ -8,6 +8,7 @@ import type {
   Settings,
   UserSettings,
   CapturedWindow,
+  YabaiInstallResult,
 } from '../shared/types';
 
 export interface WindowSaverApi {
@@ -31,6 +32,7 @@ export interface WindowSaverApi {
   listDisplays(): Promise<DisplayInfo[]>;
   listApps(): Promise<string[]>;
   isYabaiAvailable(): Promise<boolean>;
+  installYabai(): Promise<YabaiInstallResult>;
   onDisplaysChanged(cb: (displays: DisplayInfo[]) => void): () => void;
   ensureDesktops(
     displayBounds: { x: number; y: number },

@@ -1,7 +1,22 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+import type { YabaiInstallResult } from '../../shared/types.js';
 
 const execFileAsync = promisify(execFile);
+
+// GUI apps launched from Finder don't inherit the shell's PATH, so Homebrew's
+// bin dir (Apple Silicon vs Intel default prefix) is often missing even when
+// installed. Check the well-known locations before falling back to bare PATH.
+const BREW_CANDIDATES = ['/opt/homebrew/bin/brew', '/usr/local/bin/brew'];
+
+function resolveBrewPath(): string | null {
+  for (const candidate of BREW_CANDIDATES) {
+    if (existsSync(candidate)) return candidate;
+  }
+  return null;
+}
 
 const YABAI_MISSING_MESSAGE =
   'yabai bulunamadı. Space (masaüstü) desteği için yabai kurulu ve çalışır olmalı: ' +
@@ -74,6 +89,43 @@ export async function isYabaiAvailable(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+// Automates the part that's actually automatable (brew install + start the
+// service). Granting Accessibility and loading the scripting-addition need
+// user interaction / a SIP change respectively, so we stop short of those and
+// tell the user what's left. See SCRIPTING_ADDITION_MESSAGE for the SA part.
+export async function installYabai(): Promise<YabaiInstallResult> {
+  const brewPath = resolveBrewPath();
+  if (!brewPath) {
+    return {
+      ok: false,
+      message:
+        "Homebrew bulunamadı. Önce https://brew.sh adresindeki kurulum komutunu Terminal'de çalıştırın, ardından tekrar deneyin.",
+    };
+  }
+
+  try {
+    await execFileAsync(brewPath, ['install', 'yabai'], { maxBuffer: 1024 * 1024 * 20 });
+  } catch (err) {
+    return { ok: false, message: `yabai kurulumu başarısız: ${(err as Error).message}` };
+  }
+
+  const yabaiPath = path.join(path.dirname(brewPath), 'yabai');
+  try {
+    await execFileAsync(existsSync(yabaiPath) ? yabaiPath : 'yabai', ['--start-service']);
+  } catch (err) {
+    return {
+      ok: false,
+      message: `yabai kuruldu ama servis başlatılamadı: ${(err as Error).message}. Terminal'de "yabai --start-service" deneyin.`,
+    };
+  }
+
+  return {
+    ok: true,
+    message:
+      "yabai kuruldu ve servis başlatıldı. Şimdi Sistem Ayarları > Gizlilik ve Güvenlik > Erişilebilirlik izninde yabai'yi işaretleyin.",
+  };
 }
 
 export async function queryDisplays(): Promise<YabaiDisplay[]> {
