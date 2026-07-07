@@ -12,6 +12,14 @@ export async function runAppleScript(script: string): Promise<string> {
   return stdout.trim();
 }
 
+// Runs an osascript in JavaScript-for-Automation mode. Used for the few things
+// that need the ObjC bridge (e.g. CoreGraphics window geometry) which classic
+// AppleScript can't reach.
+export async function runJXA(script: string): Promise<string> {
+  const { stdout } = await execFileAsync('osascript', ['-l', 'JavaScript', '-e', script]);
+  return stdout.trim();
+}
+
 export async function runShell(command: string, args: string[]): Promise<void> {
   await execFileAsync(command, args);
 }
