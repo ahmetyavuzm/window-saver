@@ -14,10 +14,14 @@ export function LayoutCanvas({ displays, renderBoxes }: LayoutCanvasProps) {
     return <div className="layout-canvas empty-state">Detecting displays…</div>;
   }
 
-  const minX = Math.min(...displays.map((d) => d.bounds.x));
-  const minY = Math.min(...displays.map((d) => d.bounds.y));
-  const maxX = Math.max(...displays.map((d) => d.bounds.x + d.bounds.width));
-  const maxY = Math.max(...displays.map((d) => d.bounds.y + d.bounds.height));
+  // Draw the canvas in workArea space (menu bar / dock excluded), not full
+  // display bounds. A box's NormalizedRect is defined relative to workArea
+  // and that's where the engine actually places the window, so the canvas
+  // must use the same space or what you draw won't match where it lands.
+  const minX = Math.min(...displays.map((d) => d.workArea.x));
+  const minY = Math.min(...displays.map((d) => d.workArea.y));
+  const maxX = Math.max(...displays.map((d) => d.workArea.x + d.workArea.width));
+  const maxY = Math.max(...displays.map((d) => d.workArea.y + d.workArea.height));
   const unionWidth = maxX - minX;
   const unionHeight = maxY - minY;
 
@@ -31,10 +35,10 @@ export function LayoutCanvas({ displays, renderBoxes }: LayoutCanvasProps) {
         <DisplayFrame
           key={display.id}
           display={display}
-          left={(display.bounds.x - minX) * scale}
-          top={(display.bounds.y - minY) * scale}
-          width={display.bounds.width * scale}
-          height={display.bounds.height * scale}
+          left={(display.workArea.x - minX) * scale}
+          top={(display.workArea.y - minY) * scale}
+          width={display.workArea.width * scale}
+          height={display.workArea.height * scale}
         >
           {renderBoxes?.(display, scale)}
         </DisplayFrame>

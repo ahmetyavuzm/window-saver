@@ -50,6 +50,7 @@ async function setWindowBounds(
 
 export async function handlePositionWindow(
   step: PositionWindowStep,
+  knownWindowTitle?: string,
 ): Promise<Omit<LogEntry, 'stepId' | 'timestamp'>> {
   try {
     // "activate" reliably brings the app to the actual OS-level front. System
@@ -59,9 +60,13 @@ export async function handlePositionWindow(
     await runAppleScript(`tell application "${toAppleScriptString(step.appName)}" to activate`);
     await sleep(300);
 
-    const windowRef = await getWindowRef(step.appName, step.windowTitle);
+    // Prefer the title captured when a preceding step in this same box
+    // opened the window (e.g. openTerminal) over the user-configured
+    // windowTitle, which may be blank for auto-generated boxes.
+    const effectiveWindowTitle = step.windowTitle ?? knownWindowTitle;
+    const windowRef = await getWindowRef(step.appName, effectiveWindowTitle);
 
-    if (step.windowTitle) {
+    if (effectiveWindowTitle) {
       await runAppleScript(`
         tell application "System Events"
           perform action "AXRaise" of (${windowRef})
@@ -104,7 +109,7 @@ export async function handlePositionWindow(
     await setWindowBounds(windowRef, targetBounds);
 
     const detail = [
-      step.windowTitle ? `window "${step.windowTitle}"` : null,
+      effectiveWindowTitle ? `window "${effectiveWindowTitle}"` : null,
       step.spaceIndex !== undefined ? `space ${step.spaceIndex}` : null,
       fallbackReason ?? null,
     ]

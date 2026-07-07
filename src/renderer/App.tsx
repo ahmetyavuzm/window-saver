@@ -188,8 +188,8 @@ export function App() {
                         <WindowBox
                           key={box.groupId}
                           rect={box.rect}
-                          parentWidth={display.bounds.width * scale}
-                          parentHeight={display.bounds.height * scale}
+                          parentWidth={display.workArea.width * scale}
+                          parentHeight={display.workArea.height * scale}
                           label={box.label}
                           onClick={() => setConfigTarget({ groupId: box.groupId, display, config: box.config })}
                           onChange={(next) => {
