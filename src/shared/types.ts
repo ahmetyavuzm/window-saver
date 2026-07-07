@@ -17,6 +17,21 @@ export interface WindowPlacement {
   rect: NormalizedRect;
 }
 
+/**
+ * A single post-launch action run against a box's app. `label` is the
+ * friendly text shown in the UI (from the app-action catalog or typed by the
+ * user for a generic action).
+ *  - 'openTarget': `open -a <box's appName> <value>` — value is a file/folder
+ *    path or a URI (custom scheme like `spotify:track:…`, or a plain URL).
+ *  - 'appleScript': raw script run via osascript (catalog actions hide this
+ *    behind a friendly label, e.g. Spotify Play/Pause).
+ *  - 'wait': pause before the next action.
+ */
+export type BoxAction =
+  | { id: string; kind: 'openTarget'; label: string; value: string }
+  | { id: string; kind: 'appleScript'; label: string; script: string }
+  | { id: string; kind: 'wait'; label: string; ms: number };
+
 export type Step =
   | {
       type: 'launchApp';
@@ -61,6 +76,8 @@ export type Step =
        *    desktop (and can still be moved to a `desktopIndex`).
        */
       fullscreenMode?: 'native' | 'maximize';
+      /** Ordered, app-specific actions run after this box's window is placed. */
+      actions?: BoxAction[];
       groupId?: string;
     }
   | {

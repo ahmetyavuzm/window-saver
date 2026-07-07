@@ -3,7 +3,8 @@ import { LaunchAppFields, type LaunchAppValue } from '../fields/LaunchAppFields'
 import { OpenUrlFields, type OpenUrlValue } from '../fields/OpenUrlFields';
 import { OpenTerminalFields, type OpenTerminalValue } from '../fields/OpenTerminalFields';
 import type { BoxConfig, BoxKind } from '../../hooks/useLayoutBoxes';
-import type { DisplayInfo } from '../../../shared/types';
+import type { BoxAction, DisplayInfo } from '../../../shared/types';
+import { GENERIC_ACTIONS, catalogActionsFor } from '../../actionCatalog';
 
 interface Props {
   initial: BoxConfig;
@@ -55,9 +56,48 @@ export function BoxConfigPanel({
     initial.fullscreenMode ?? 'native',
   );
 
+  const [actions, setActions] = useState<BoxAction[]>(initial.actions ?? []);
+  const currentAppName =
+    kind === 'launchApp' ? launchApp.appName : kind === 'openUrl' ? (openUrl.browser !== 'default' ? openUrl.browser : 'Safari') : 'Terminal';
+  const templates = [...catalogActionsFor(currentAppName), ...GENERIC_ACTIONS];
+  const [templateLabel, setTemplateLabel] = useState<string>(templates[0]?.label ?? '');
+  const selectedTemplate = templates.find((t) => t.label === templateLabel);
+  const [pendingValue, setPendingValue] = useState('');
+  const [pendingMs, setPendingMs] = useState(1000);
+
+  function addAction() {
+    const t = selectedTemplate;
+    if (!t) return;
+    let action: BoxAction;
+    if (t.kind === 'openTarget') {
+      if (!pendingValue.trim()) return;
+      action = { id: crypto.randomUUID(), kind: 'openTarget', label: t.label, value: pendingValue.trim() };
+    } else if (t.kind === 'appleScript') {
+      const script = t.script || pendingValue;
+      if (!script.trim()) return;
+      action = { id: crypto.randomUUID(), kind: 'appleScript', label: t.label, script };
+    } else {
+      action = { id: crypto.randomUUID(), kind: 'wait', label: t.label, ms: pendingMs };
+    }
+    setActions([...actions, action]);
+    setPendingValue('');
+  }
+
+  function removeAction(id: string) {
+    setActions(actions.filter((a) => a.id !== id));
+  }
+
+  function moveAction(index: number, dir: -1 | 1) {
+    const target = index + dir;
+    if (target < 0 || target >= actions.length) return;
+    const next = [...actions];
+    [next[index], next[target]] = [next[target], next[index]];
+    setActions(next);
+  }
+
   function handleSave(e: React.FormEvent) {
     e.preventDefault();
-    const fs = { fullscreen, ...(fullscreen ? { fullscreenMode } : {}) };
+    const fs = { fullscreen, ...(fullscreen ? { fullscreenMode } : {}), ...(actions.length ? { actions } : {}) };
     if (kind === 'launchApp') {
       onSave({
         kind,
@@ -137,6 +177,64 @@ export function BoxConfigPanel({
             </label>
           </div>
         )}
+        <div className="box-actions-section">
+          <label className="box-actions-title">Actions after launch</label>
+          {actions.length > 0 && (
+            <ul className="box-actions-list">
+              {actions.map((a, i) => (
+                <li key={a.id}>
+                  <span>{a.label}</span>
+                  <span className="box-actions-controls">
+                    <button type="button" disabled={i === 0} onClick={() => moveAction(i, -1)}>
+                      ↑
+                    </button>
+                    <button type="button" disabled={i === actions.length - 1} onClick={() => moveAction(i, 1)}>
+                      ↓
+                    </button>
+                    <button type="button" onClick={() => removeAction(a.id)}>
+                      ✕
+                    </button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="box-actions-add">
+            <select
+              value={templateLabel}
+              onChange={(e) => {
+                setTemplateLabel(e.target.value);
+                setPendingValue('');
+              }}
+            >
+              {templates.map((t) => (
+                <option key={t.label} value={t.label}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+            {selectedTemplate?.kind === 'openTarget' && (
+              <input
+                placeholder={selectedTemplate.placeholder}
+                value={pendingValue}
+                onChange={(e) => setPendingValue(e.target.value)}
+              />
+            )}
+            {selectedTemplate?.kind === 'appleScript' && !selectedTemplate.script && (
+              <textarea
+                placeholder="AppleScript…"
+                value={pendingValue}
+                onChange={(e) => setPendingValue(e.target.value)}
+              />
+            )}
+            {selectedTemplate?.kind === 'wait' && (
+              <input type="number" min={0} value={pendingMs} onChange={(e) => setPendingMs(Number(e.target.value))} />
+            )}
+            <button type="button" onClick={addAction}>
+              Add
+            </button>
+          </div>
+        </div>
         <div className="box-config-actions">
           {onDelete && (
             <button type="button" className="box-config-delete" onClick={onDelete}>

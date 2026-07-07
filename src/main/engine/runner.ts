@@ -5,6 +5,7 @@ import { handlePositionWindow } from './handlers/positionWindow.js';
 import { handleOpenUrl } from './handlers/openUrl.js';
 import { handleOpenTerminal } from './handlers/openTerminal.js';
 import { handleWait } from './handlers/wait.js';
+import { runBoxAction } from './handlers/runAction.js';
 import { createDesktopViaMissionControl } from './missioncontrol.js';
 import * as registry from './registry.js';
 import type { StepResult } from './types.js';
@@ -99,6 +100,13 @@ export async function runProfile(
       const entry: LogEntry = { stepId: step.id, timestamp: new Date().toISOString(), ...result };
       emit(entry);
       if (result.status === 'error') ok = false;
+
+      for (const action of step.actions ?? []) {
+        emit({ stepId: action.id, status: 'running', message: `Running action: ${action.label}`, timestamp: new Date().toISOString() });
+        const actionResult = await runBoxAction(action, step.appName);
+        emit({ stepId: action.id, timestamp: new Date().toISOString(), ...actionResult });
+        if (actionResult.status === 'error') ok = false;
+      }
       continue;
     }
 

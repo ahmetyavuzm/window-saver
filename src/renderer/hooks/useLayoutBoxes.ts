@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { DisplayInfo, NormalizedRect, Step } from '../../shared/types';
+import type { BoxAction, DisplayInfo, NormalizedRect, Step } from '../../shared/types';
 import type { Browser } from '../components/fields/OpenUrlFields';
 
 export type BoxKind = 'launchApp' | 'openUrl' | 'openTerminal';
@@ -18,6 +18,7 @@ export interface BoxConfig {
   // How a fullscreen box fills the display: native (own Space, not draggable)
   // or maximize (fills workArea, keeps title bar, draggable). Default 'native'.
   fullscreenMode?: 'native' | 'maximize';
+  actions?: BoxAction[]; // ordered post-launch actions (app-action catalog)
 }
 
 export interface LayoutBox {
@@ -143,6 +144,7 @@ export function deriveBoxes(steps: Step[]): LayoutBox[] {
     const finalConfig: BoxConfig = config ?? { kind: 'launchApp', appName: posStep.appName, autoInsertWait: true };
     finalConfig.fullscreen = posStep.fullscreen ?? false;
     finalConfig.fullscreenMode = posStep.fullscreenMode ?? 'native';
+    finalConfig.actions = posStep.actions;
     boxes.push({
       groupId,
       displayId: posStep.placement.display.displayId,
@@ -188,6 +190,7 @@ export function createBoxSteps(
     ...(desktopIndex !== undefined ? { desktopIndex } : {}),
     ...(config.fullscreen ? { fullscreen: true } : {}),
     ...(config.fullscreen && config.fullscreenMode === 'maximize' ? { fullscreenMode: 'maximize' as const } : {}),
+    ...(config.actions && config.actions.length > 0 ? { actions: config.actions } : {}),
     groupId,
   };
   return [...steps, ...built, positionStep];
@@ -220,6 +223,8 @@ export function updateBoxConfig(steps: Step[], groupId: string, config: BoxConfi
       updatedPosition.placement = { ...positionStep.placement, rect: DEFAULT_BOX_RECT };
     }
   }
+  if (config.actions && config.actions.length > 0) updatedPosition.actions = config.actions;
+  else delete updatedPosition.actions;
 
   return [...before, ...built, updatedPosition, ...after];
 }
