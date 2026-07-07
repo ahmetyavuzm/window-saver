@@ -40,12 +40,10 @@ function hasWindowedTarget(profile: Profile): boolean {
     if (isNativeFullscreen(s) && 'groupId' in s && s.groupId) nativeFullscreenGroups.add(s.groupId);
   }
   for (const s of profile.steps) {
-    // Browser windows (openUrl) are always windowed.
-    if (s.type === 'openUrl') return true;
     // Any placement that isn't native fullscreen is a windowed target.
     if (s.type === 'positionWindow' && !isNativeFullscreen(s)) return true;
-    // A launched app / terminal is windowed unless its group is native fullscreen.
-    if (s.type === 'launchApp' || s.type === 'openTerminal') {
+    // A launched app / terminal / opened URL is windowed unless its group is native fullscreen.
+    if (s.type === 'launchApp' || s.type === 'openTerminal' || s.type === 'openUrl') {
       if (!s.groupId || !nativeFullscreenGroups.has(s.groupId)) return true;
     }
   }
