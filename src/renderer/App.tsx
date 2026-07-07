@@ -58,12 +58,19 @@ export function App() {
   const [yabaiAvailable, setYabaiAvailable] = useState<boolean | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [captureOpen, setCaptureOpen] = useState(false);
+  const [installedApps, setInstalledApps] = useState<string[]>([]);
   const displays = useDisplays();
   const { settings, updateSettings } = useSettings();
   const desktopLayout = settings?.desktopLayout ?? 'grid';
 
   useEffect(() => {
     void window.windowSaver.isYabaiAvailable().then(setYabaiAvailable);
+  }, []);
+
+  useEffect(() => {
+    // Installed apps for the Launch App picker; best-effort (empty on failure
+    // just falls back to free-typing the name).
+    void window.windowSaver.listApps().then(setInstalledApps).catch(() => setInstalledApps([]));
   }, []);
 
   useEffect(() => {
@@ -191,6 +198,7 @@ export function App() {
         parentHeight={display.workArea.height * scale}
         label={box.label}
         fullscreen={box.fullscreen}
+        fullscreenMode={box.fullscreenMode}
         onClick={() =>
           setConfigTarget({ groupId: box.groupId, display, config: box.config, desktopIndex: box.desktopIndex })
         }
@@ -247,9 +255,17 @@ export function App() {
         target,
       );
       if (res.needsScriptingAddition) {
+        // yabai can't create desktops without its SIP-off scripting-addition.
+        // Fall back to the SIP-free Mission Control "+" (AX) — it lands on the
+        // active display, so the user drags it to the target screen.
+        const ax = await window.windowSaver.createDesktop();
         setNotice(
-          'Otomatik masaüstü oluşturma için yabai scripting-addition gerekli. Terminal\'de ' +
-            '"sudo yabai --load-sa" çalıştırıp tekrar deneyin (gerekirse kısmi SIP kapatın).',
+          ax.created
+            ? 'Yeni masaüstü Mission Control ile oluşturuldu (aktif ekranda). ' +
+                'Doğru ekrana sürükleyip pencereleri yerleştirin. ' +
+                'Ekran-bazlı otomatik yerleştirme için yabai --load-sa gerekir.'
+            : 'Masaüstü oluşturulamadı (Mission Control). Erişilebilirlik izni açık mı? ' +
+                (ax.error ?? ''),
         );
       } else if (res.created > 0) {
         setNotice(`${res.created} masaüstü oluşturuldu (${where}).`);
@@ -301,6 +317,11 @@ export function App() {
 
   return (
     <div className="app">
+      {/* Full-width draggable strip along the top edge. With titleBarStyle
+          'hiddenInset' the OS title bar is hidden, so without this the window
+          has no grab handle and can't be moved. Interactive controls sit below
+          it (sidebar/main padding is offset), and modals (z 1000+) cover it. */}
+      <div className="titlebar-drag" aria-hidden="true" />
       <ProfileList
         profiles={profiles}
         selectedId={selectedId}
@@ -404,6 +425,7 @@ export function App() {
             {configTarget && (
               <BoxConfigPanel
                 initial={configTarget.config}
+                installedApps={installedApps}
                 onSave={handleSaveConfig}
                 onCancel={() => setConfigTarget(null)}
                 onDelete={
@@ -461,7 +483,12 @@ export function App() {
       </div>
       {settingsOpen && settings && (
         <SettingsPanel
-          settings={{ theme: settings.theme, accentColor: settings.accentColor, desktopLayout: settings.desktopLayout }}
+          settings={{
+            theme: settings.theme,
+            accentColor: settings.accentColor,
+            desktopLayout: settings.desktopLayout,
+            desktopMode: settings.desktopMode,
+          }}
           onUpdate={(partial) => void updateSettings(partial)}
           onClose={() => setSettingsOpen(false)}
         />

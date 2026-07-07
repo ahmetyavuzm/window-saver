@@ -28,7 +28,13 @@ async function resolvePid(appName: string, timeoutMs = 4000): Promise<number | u
 
 export async function handleLaunchApp(step: LaunchAppStep): Promise<StepResult> {
   try {
-    const args = step.bundleId ? ['-b', step.bundleId] : ['-a', step.appName];
+    // `-n` forces a new instance/window even if the app is already running;
+    // without it `open` just activates the running app (positionWindow then
+    // re-uses that window).
+    const args = [
+      ...(step.openNewWindow ? ['-n'] : []),
+      ...(step.bundleId ? ['-b', step.bundleId] : ['-a', step.appName]),
+    ];
     if (step.args?.length) args.push('--args', ...step.args);
     await runShell('open', args);
     const pid = await resolvePid(step.appName);

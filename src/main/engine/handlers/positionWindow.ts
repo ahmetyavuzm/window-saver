@@ -19,9 +19,21 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// A 'maximize' fullscreen box stays a normal, draggable window (it just fills
+// the workArea), so it behaves like any placed window. Only *native* fullscreen
+// gets macOS's own Space / title-bar-less treatment.
+function isNativeFullscreen(step: PositionWindowStep): boolean {
+  return step.fullscreen === true && step.fullscreenMode !== 'maximize';
+}
+
 // True when this step asks to move the window to a non-default desktop. Desktop
 // 1 (or unset) means "leave it on the display's current Space" — no yabai move.
+// Native fullscreen wins: such a window gets its OWN macOS Space automatically,
+// so we never resolve/create a desktop for it (doing so is a no-op that also
+// spuriously fails when the display has too few desktops). A maximize box is a
+// regular window, so it CAN be moved to a desktop.
 function wantsDesktopMove(step: PositionWindowStep): boolean {
+  if (isNativeFullscreen(step)) return false;
   return step.desktopIndex !== undefined && step.desktopIndex > 1;
 }
 
@@ -197,7 +209,7 @@ async function positionTerminal(step: PositionWindowStep, knownWindowId?: number
     await sleep(300);
   }
 
-  if (step.fullscreen) {
+  if (isNativeFullscreen(step)) {
     // System Events refuses to drive Terminal (-10006), so native fullscreen
     // goes through yabai on the focused window.
     if (!(await isYabaiAvailable())) {
@@ -323,7 +335,7 @@ async function positionGeneric(step: PositionWindowStep): Promise<StepLog> {
     await sleep(300);
   }
 
-  if (step.fullscreen) {
+  if (isNativeFullscreen(step)) {
     await setNativeFullscreen(windowRef);
     return successMessage(
       step,

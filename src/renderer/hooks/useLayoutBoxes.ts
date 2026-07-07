@@ -8,11 +8,16 @@ export interface BoxConfig {
   kind: BoxKind;
   appName?: string;
   autoInsertWait?: boolean;
+  openNewWindow?: boolean; // launchApp: force a new instance/window (open -n)
   url?: string;
   browser?: Browser;
+  newWindow?: boolean; // openUrl: open a dedicated window instead of a tab
   cwd?: string;
   command?: string;
-  fullscreen?: boolean; // open the window as native fullscreen (ignores rect)
+  fullscreen?: boolean; // open the window filling the display (ignores rect)
+  // How a fullscreen box fills the display: native (own Space, not draggable)
+  // or maximize (fills workArea, keeps title bar, draggable). Default 'native'.
+  fullscreenMode?: 'native' | 'maximize';
 }
 
 export interface LayoutBox {
@@ -23,6 +28,7 @@ export interface LayoutBox {
   config: BoxConfig;
   desktopIndex?: number; // desktop within this box's display; undefined/1 = current desktop
   fullscreen?: boolean;
+  fullscreenMode?: 'native' | 'maximize';
 }
 
 // A box is "fullscreen" when its rect fills the whole display workArea. Used
@@ -54,10 +60,10 @@ function labelFor(config: BoxConfig): string {
 
 function configFromStep(step: Step): BoxConfig | undefined {
   if (step.type === 'launchApp') {
-    return { kind: 'launchApp', appName: step.appName, autoInsertWait: true };
+    return { kind: 'launchApp', appName: step.appName, autoInsertWait: true, openNewWindow: step.openNewWindow ?? false };
   }
   if (step.type === 'openUrl') {
-    return { kind: 'openUrl', url: step.url, browser: step.browser };
+    return { kind: 'openUrl', url: step.url, browser: step.browser, newWindow: step.newWindow ?? false };
   }
   if (step.type === 'openTerminal') {
     return { kind: 'openTerminal', cwd: step.cwd, command: step.command };
@@ -77,7 +83,15 @@ export function appNameForConfig(config: BoxConfig): string {
 function buildKindSteps(groupId: string, config: BoxConfig): Step[] {
   if (config.kind === 'launchApp') {
     const appName = config.appName ?? '';
-    const steps: Step[] = [{ type: 'launchApp', id: `${groupId}-launch`, appName, groupId }];
+    const steps: Step[] = [
+      {
+        type: 'launchApp',
+        id: `${groupId}-launch`,
+        appName,
+        ...(config.openNewWindow ? { openNewWindow: true } : {}),
+        groupId,
+      },
+    ];
     if (config.autoInsertWait ?? true) {
       steps.push({ type: 'waitForWindow', id: `${groupId}-wait`, appName, timeoutMs: 8000, groupId });
     }
@@ -90,6 +104,7 @@ function buildKindSteps(groupId: string, config: BoxConfig): Step[] {
         id: `${groupId}-launch`,
         url: config.url ?? '',
         browser: config.browser ?? 'default',
+        ...(config.newWindow ? { newWindow: true } : {}),
         groupId,
       },
     ];
@@ -127,6 +142,7 @@ export function deriveBoxes(steps: Step[]): LayoutBox[] {
     const config = launchStep ? configFromStep(launchStep) : undefined;
     const finalConfig: BoxConfig = config ?? { kind: 'launchApp', appName: posStep.appName, autoInsertWait: true };
     finalConfig.fullscreen = posStep.fullscreen ?? false;
+    finalConfig.fullscreenMode = posStep.fullscreenMode ?? 'native';
     boxes.push({
       groupId,
       displayId: posStep.placement.display.displayId,
@@ -135,6 +151,7 @@ export function deriveBoxes(steps: Step[]): LayoutBox[] {
       config: finalConfig,
       desktopIndex: posStep.desktopIndex,
       fullscreen: posStep.fullscreen ?? false,
+      fullscreenMode: posStep.fullscreenMode ?? 'native',
     });
   }
   return boxes;
@@ -170,6 +187,7 @@ export function createBoxSteps(
     },
     ...(desktopIndex !== undefined ? { desktopIndex } : {}),
     ...(config.fullscreen ? { fullscreen: true } : {}),
+    ...(config.fullscreen && config.fullscreenMode === 'maximize' ? { fullscreenMode: 'maximize' as const } : {}),
     groupId,
   };
   return [...steps, ...built, positionStep];
@@ -192,9 +210,12 @@ export function updateBoxConfig(steps: Step[], groupId: string, config: BoxConfi
   // Turning it off restores an editable rect if the box was still full-screen.
   if (config.fullscreen) {
     updatedPosition.fullscreen = true;
+    if (config.fullscreenMode === 'maximize') updatedPosition.fullscreenMode = 'maximize';
+    else delete updatedPosition.fullscreenMode;
     updatedPosition.placement = { ...positionStep.placement, rect: FULLSCREEN_RECT };
   } else {
     delete updatedPosition.fullscreen;
+    delete updatedPosition.fullscreenMode;
     if (isFullscreenRect(positionStep.placement.rect)) {
       updatedPosition.placement = { ...positionStep.placement, rect: DEFAULT_BOX_RECT };
     }
@@ -226,8 +247,13 @@ export function updateBoxRect(steps: Step[], groupId: string, rect: NormalizedRe
   return steps.map((step) => {
     if (step.type !== 'positionWindow' || step.groupId !== groupId || !step.placement) return step;
     const next: Step = { ...step, placement: { ...step.placement, rect } };
+    // Cover-the-frame auto-marks fullscreen but keeps the existing mode (native
+    // vs maximize); shrinking back clears both.
     if (isFullscreenRect(rect)) next.fullscreen = true;
-    else delete next.fullscreen;
+    else {
+      delete next.fullscreen;
+      delete next.fullscreenMode;
+    }
     return next;
   });
 }

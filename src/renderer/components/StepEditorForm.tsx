@@ -34,8 +34,8 @@ export function StepEditorForm({ onAdd }: Props) {
   const [windowTitle, setWindowTitle] = useState('');
   const [desktopIndex, setDesktopIndex] = useState('');
   const [ms, setMs] = useState(1000);
-  const [launchApp, setLaunchApp] = useState<LaunchAppValue>({ appName: '', autoInsertWait: true });
-  const [openUrl, setOpenUrl] = useState<OpenUrlValue>({ url: '', browser: 'default' });
+  const [launchApp, setLaunchApp] = useState<LaunchAppValue>({ appName: '', autoInsertWait: true, openNewWindow: false });
+  const [openUrl, setOpenUrl] = useState<OpenUrlValue>({ url: '', browser: 'default', newWindow: false });
   const [openTerminal, setOpenTerminal] = useState<OpenTerminalValue>({ cwd: '', command: '' });
 
   function submit(e: React.FormEvent) {
@@ -43,7 +43,12 @@ export function StepEditorForm({ onAdd }: Props) {
     const steps: Step[] = [];
 
     if (type === 'launchApp') {
-      steps.push({ type: 'launchApp', id: newId(), appName: launchApp.appName });
+      steps.push({
+        type: 'launchApp',
+        id: newId(),
+        appName: launchApp.appName,
+        ...(launchApp.openNewWindow ? { openNewWindow: true } : {}),
+      });
       if (launchApp.autoInsertWait) {
         steps.push({ type: 'waitForWindow', id: newId(), appName: launchApp.appName, timeoutMs: 8000 });
       }
@@ -57,7 +62,13 @@ export function StepEditorForm({ onAdd }: Props) {
         desktopIndex: desktopIndex ? Number(desktopIndex) : undefined,
       });
     } else if (type === 'openUrl') {
-      steps.push({ type: 'openUrl', id: newId(), url: openUrl.url, browser: openUrl.browser });
+      steps.push({
+        type: 'openUrl',
+        id: newId(),
+        url: openUrl.url,
+        browser: openUrl.browser,
+        ...(openUrl.newWindow ? { newWindow: true } : {}),
+      });
     } else if (type === 'openTerminal') {
       steps.push({
         type: 'openTerminal',
@@ -72,8 +83,8 @@ export function StepEditorForm({ onAdd }: Props) {
 
     onAdd(steps);
     setAppName('');
-    setLaunchApp({ appName: '', autoInsertWait: true });
-    setOpenUrl({ url: '', browser: 'default' });
+    setLaunchApp({ appName: '', autoInsertWait: true, openNewWindow: false });
+    setOpenUrl({ url: '', browser: 'default', newWindow: false });
     setOpenTerminal({ cwd: '', command: '' });
     setWindowTitle('');
     setDesktopIndex('');

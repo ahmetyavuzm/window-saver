@@ -7,6 +7,7 @@ interface WindowBoxProps {
   parentHeight: number;
   label: string;
   fullscreen?: boolean;
+  fullscreenMode?: 'native' | 'maximize';
   onChange: (rect: NormalizedRect) => void;
   onClick?: () => void;
   onDelete?: () => void;
@@ -14,7 +15,8 @@ interface WindowBoxProps {
 
 const MIN_SIZE_PX = 40;
 
-export function WindowBox({ rect, parentWidth, parentHeight, label, fullscreen, onChange, onClick, onDelete }: WindowBoxProps) {
+export function WindowBox({ rect, parentWidth, parentHeight, label, fullscreen, fullscreenMode, onChange, onClick, onDelete }: WindowBoxProps) {
+  const maximize = fullscreen && fullscreenMode === 'maximize';
   return (
     <Rnd
       className={fullscreen ? 'window-box window-box-fullscreen' : 'window-box'}
@@ -42,7 +44,14 @@ export function WindowBox({ rect, parentWidth, parentHeight, label, fullscreen, 
       onClick={onClick}
     >
       <div className="window-box-label">
-        {fullscreen && <span className="window-box-fs-badge" title="Fullscreen">⛶</span>}
+        {fullscreen && (
+          <span
+            className="window-box-fs-badge"
+            title={maximize ? 'Maximize (draggable)' : 'Native fullscreen'}
+          >
+            {maximize ? '⤢' : '⛶'}
+          </span>
+        )}
         {label}
       </div>
       {onDelete && (

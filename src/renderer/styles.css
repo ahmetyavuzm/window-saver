@@ -24,6 +24,9 @@
   --danger: #ff3b30;
   --success: #30a14e;
 
+  --scrollbar-thumb: rgba(0, 0, 0, 0.22);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.4);
+
   --radius: 10px;
   --radius-sm: 6px;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06), 0 1px 1px rgba(0, 0, 0, 0.04);
@@ -47,12 +50,33 @@
   --danger: #ff453a;
   --success: #32d74b;
 
+  --scrollbar-thumb: rgba(255, 255, 255, 0.16);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.32);
+
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 20px 48px rgba(0, 0, 0, 0.6), 0 6px 16px rgba(0, 0, 0, 0.5);
 }
 
 * { box-sizing: border-box; }
+
+/* ---------------------------------------------------------------------------
+   Scrollbars — the default Chromium bar looks unstyled/heavy on dark. Make it
+   thin, overlay-style, and theme-aware. The 3px transparent border + padding-box
+   clip insets the thumb so it reads as a slim rounded pill, not a full-width bar.
+--------------------------------------------------------------------------- */
+* { scrollbar-color: var(--scrollbar-thumb) transparent; scrollbar-width: thin; }
+::-webkit-scrollbar { width: 12px; height: 12px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+  transition: background var(--dur) var(--ease);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); background-clip: padding-box; }
 
 body {
   margin: 0;
@@ -103,46 +127,97 @@ input:focus, select:focus {
 --------------------------------------------------------------------------- */
 .app { display: flex; height: 100vh; }
 
+/* Draggable window handle (hiddenInset title bar is hidden — see App.tsx). Spans
+   the full width so the window can always be grabbed near the top edge. Sits
+   below modal overlays (z 1000+). Traffic-light buttons stay clickable (native,
+   drawn above). Content below starts past this strip via the panes' top padding. */
+.titlebar-drag {
+  position: fixed; top: 0; left: 0; right: 0; height: 28px;
+  -webkit-app-region: drag; z-index: 50;
+}
+
 .profile-list {
-  width: 220px;
-  background: var(--surface-2);
+  width: 232px;
+  flex-shrink: 0;
+  background: linear-gradient(180deg, var(--surface-2), var(--bg));
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   /* Extra top padding clears the inset traffic-light buttons (hiddenInset). */
-  padding: 32px 12px 12px;
+  padding: 30px 12px 12px;
   transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
 }
 .profile-list-header {
-  display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;
+  display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;
   -webkit-app-region: drag;
 }
 .profile-list-header button { -webkit-app-region: no-drag; }
-.profile-list-header button { padding: 4px 10px; font-size: 12px; }
-.new-profile-input { width: 100%; margin-bottom: 8px; }
-.profile-list h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); margin: 0; }
-.profile-list ul { list-style: none; padding: 0; margin: 8px 0 0; flex: 1; overflow-y: auto; }
-.profile-list li {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 7px 10px; border-radius: var(--radius-sm); cursor: pointer;
-  margin-bottom: 2px;
-  transition: background var(--dur) var(--ease), color var(--dur) var(--ease), transform var(--dur) var(--ease);
+.profile-list h2 {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--text-muted); margin: 0; font-weight: 600;
 }
+/* Compact round "+ New" button in the header. */
+.new-profile-btn {
+  padding: 3px 10px; font-size: 12px; font-weight: 500; border-radius: 999px;
+  color: var(--accent); background: var(--accent-soft); border-color: transparent;
+}
+.new-profile-btn:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); border-color: transparent; }
+/* Full-width capture action beneath the header. */
+.sidebar-action {
+  width: 100%; margin-bottom: 8px; font-size: 12px; font-weight: 500;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  border-style: dashed;
+}
+.sidebar-action:hover { border-style: dashed; color: var(--accent); border-color: var(--accent); }
+.new-profile-input { width: 100%; margin-bottom: 8px; }
+.profile-list ul {
+  list-style: none; padding: 0; margin: 4px 0 0; flex: 1; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.profile-list li {
+  position: relative;
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  padding: 8px 10px 8px 12px; border-radius: var(--radius-sm); cursor: pointer;
+  color: var(--text);
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+/* Left accent indicator, revealed for the active profile. */
+.profile-list li::before {
+  content: ''; position: absolute; left: 3px; top: 50%; transform: translateY(-50%);
+  width: 3px; height: 0; border-radius: 999px; background: var(--accent);
+  transition: height var(--dur) var(--ease);
+}
+.profile-list li > span:not(.profile-count) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .profile-list li:hover:not(.selected):not(.empty) { background: var(--surface-3); }
-.profile-list li.selected { background: var(--accent); color: var(--accent-fg); box-shadow: var(--shadow-sm); }
-.profile-list li.selected .delete-btn { color: var(--accent-fg); opacity: 0.8; }
-.profile-list li.empty { color: var(--text-muted); cursor: default; }
+.profile-list li.selected { background: var(--accent-soft); color: var(--accent); font-weight: 500; }
+.profile-list li.selected::before { height: 16px; }
+.profile-list li.empty {
+  color: var(--text-muted); cursor: default; font-style: italic;
+  justify-content: center; padding: 16px 10px;
+}
+/* Step-count pill; hidden while the row's delete button is showing. */
+.profile-count {
+  flex: none; font-size: 10px; font-weight: 500; color: var(--text-muted);
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 999px; padding: 1px 7px; min-width: 20px; text-align: center;
+}
+/* Reveal delete only on hover/selection to keep the list calm; the count pill
+   yields to the delete button so the row never shows both. */
+.profile-list li .delete-btn { opacity: 0; transition: opacity var(--dur) var(--ease), color var(--dur) var(--ease); }
+.profile-list li:hover .delete-btn, .profile-list li.selected .delete-btn { opacity: 1; }
+.profile-list li:hover .profile-count, .profile-list li.selected .profile-count { display: none; }
 
 .settings-trigger {
   display: flex; align-items: center; gap: 6px; justify-content: center;
-  margin-top: 8px; width: 100%; background: transparent; border: 1px solid transparent;
-  color: var(--text-muted);
+  margin-top: 8px; padding-top: 10px; width: 100%;
+  background: transparent; border: none; border-top: 1px solid var(--border);
+  border-radius: 0; color: var(--text-muted);
 }
-.settings-trigger:hover { background: var(--surface-3); border-color: var(--border); color: var(--text); }
+.settings-trigger:hover { background: transparent; color: var(--text); }
 .settings-gear { font-size: 14px; transition: transform 400ms var(--ease); display: inline-block; }
 .settings-trigger:hover .settings-gear { transform: rotate(90deg); }
 
-.main-pane { flex: 1; padding: 24px; overflow-y: auto; }
+.main-pane { flex: 1; padding: 32px 24px 24px; overflow-y: auto; }
 .profile-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
 .profile-header h1 { font-size: 20px; font-weight: 600; margin: 0; flex: 1; letter-spacing: -0.01em; }
 .profile-header button {
@@ -356,6 +431,7 @@ input:focus, select:focus {
 }
 .segmented-option:hover { background: transparent; color: var(--text); }
 .segmented-option.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); font-weight: 500; }
+.settings-hint { margin: 6px 0 0; font-size: 11px; color: var(--text-muted); }
 
 .accent-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .accent-swatch {
@@ -406,14 +482,22 @@ input:focus, select:focus {
 }
 .box-config-fullscreen input { margin: 0; }
 
+.box-config-fs-mode {
+  display: flex; flex-direction: column; gap: 6px;
+  margin: -2px 0 2px 24px; padding-left: 8px;
+  border-left: 2px solid var(--border);
+}
+.box-config-fs-mode label {
+  display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer;
+}
+.box-config-fs-mode input { margin: 0; }
+.box-config-fs-hint { color: var(--text-muted); font-size: 11px; }
+
 .window-box-fullscreen {
   background: color-mix(in srgb, var(--accent) 30%, transparent);
   border-style: dashed;
 }
 .window-box-fs-badge { margin-right: 4px; }
-
-.profile-list-actions { display: flex; align-items: center; gap: 6px; }
-.profile-list-actions .secondary { font-size: 12px; }
 
 .desktop-grid-create-real {
   margin-left: 8px; font-size: 11px; padding: 1px 8px; border-radius: var(--radius-sm);

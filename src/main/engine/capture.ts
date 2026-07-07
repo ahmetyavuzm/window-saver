@@ -1,7 +1,24 @@
 import { randomUUID } from 'node:crypto';
 import type { CapturedWindow, DisplayInfo, NormalizedRect, Step } from '../../shared/types.js';
 import { listDisplays } from '../displays.js';
+import { runAppleScript } from './applescript.js';
 import { queryDisplays, querySpaces, queryWindows } from './yabai.js';
+
+// Resolve a running process's bundle identifier from its pid via System Events.
+// Best-effort: any failure (process gone, no bundle id) yields undefined so the
+// launch step just falls back to `open -a <appName>`.
+async function resolveBundleId(pid: number): Promise<string | undefined> {
+  try {
+    const id = (
+      await runAppleScript(
+        `tell application "System Events" to get bundle identifier of (first process whose unix id is ${pid})`,
+      )
+    ).trim();
+    return id && id !== 'missing value' ? id : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 // Our own app should not be captured into the profile it is helping create.
 const SELF_APP_NAMES = new Set(['window-saver', 'Window Saver', 'Electron']);
@@ -72,6 +89,7 @@ export async function captureWindows(): Promise<CapturedWindow[]> {
   for (const list of regularByDisplay.values()) list.sort((a, b) => a - b);
 
   const captured: CapturedWindow[] = [];
+  const bundleIdByPid = new Map<number, string | undefined>();
   for (const win of windows) {
     if (win.role !== 'AXWindow' || win.subrole !== 'AXStandardWindow') continue;
     if (win['is-minimized'] || win['is-hidden'] || !win['root-window']) continue;
@@ -79,6 +97,9 @@ export async function captureWindows(): Promise<CapturedWindow[]> {
 
     const display = displayMap.get(win.display);
     if (!display) continue;
+
+    // Resolve the bundle id once per pid (apps often have several windows).
+    if (!bundleIdByPid.has(win.pid)) bundleIdByPid.set(win.pid, await resolveBundleId(win.pid));
 
     const fullscreen = win['is-native-fullscreen'];
     let desktopIndex: number | undefined;
@@ -90,6 +111,7 @@ export async function captureWindows(): Promise<CapturedWindow[]> {
 
     captured.push({
       appName: win.app,
+      bundleId: bundleIdByPid.get(win.pid),
       title: win.title,
       displayId: display.id,
       rect: normalizeFrame(win.frame, display.workArea),
@@ -112,7 +134,7 @@ export function stepsFromCapturedWindows(windows: CapturedWindow[]): Step[] {
     const display = displays.find((d) => d.id === win.displayId) ?? displays[0];
     if (!display) continue;
     const groupId = randomUUID();
-    steps.push({ type: 'launchApp', id: `${groupId}-launch`, appName: win.appName, groupId });
+    steps.push({ type: 'launchApp', id: `${groupId}-launch`, appName: win.appName, bundleId: win.bundleId, groupId });
     steps.push({ type: 'waitForWindow', id: `${groupId}-wait`, appName: win.appName, timeoutMs: 8000, groupId });
     steps.push({
       type: 'positionWindow',

@@ -3,6 +3,7 @@ export type Browser = 'default' | 'Google Chrome' | 'Safari' | 'Arc';
 export interface OpenUrlValue {
   url: string;
   browser: Browser;
+  newWindow: boolean;
 }
 
 interface Props {
@@ -12,6 +13,9 @@ interface Props {
 }
 
 export function OpenUrlFields({ value, onChange, allowDefaultBrowser = true }: Props) {
+  // "Default browser" can't be targeted by AppleScript, so new-window control
+  // only applies to a named browser.
+  const canChooseWindow = value.browser !== 'default';
   return (
     <>
       <input
@@ -26,6 +30,16 @@ export function OpenUrlFields({ value, onChange, allowDefaultBrowser = true }: P
         <option value="Safari">Safari</option>
         <option value="Arc">Arc</option>
       </select>
+      {canChooseWindow && (
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={value.newWindow}
+            onChange={(e) => onChange({ ...value, newWindow: e.target.checked })}
+          />
+          Open in a new window (instead of a tab)
+        </label>
+      )}
     </>
   );
 }

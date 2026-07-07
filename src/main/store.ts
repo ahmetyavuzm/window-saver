@@ -2,7 +2,7 @@ import Store from 'electron-store';
 import { randomUUID } from 'node:crypto';
 import type { Profile, Settings, StoreSchema, Step, UserSettings } from '../shared/types.js';
 
-const CURRENT_SCHEMA_VERSION = 5;
+const CURRENT_SCHEMA_VERSION = 6;
 
 const DEFAULT_SETTINGS: Settings = {
   onboardingComplete: false,
@@ -10,6 +10,7 @@ const DEFAULT_SETTINGS: Settings = {
   theme: 'system',
   accentColor: '#0a84ff',
   desktopLayout: 'grid',
+  desktopMode: 'reuse',
 };
 
 const store = new Store<StoreSchema>({
@@ -36,6 +37,8 @@ migrateStore();
  *  - v4 -> v5: desktopLayout setting ('tabs' | 'grid'). Purely additive — the
  *    DEFAULT_SETTINGS spread below fills the default ('grid') for any store
  *    written before v5.
+ *  - v5 -> v6: desktopMode setting ('reuse' | 'createNew'). Additive — the spread
+ *    fills the default ('reuse'), preserving prior behavior.
  */
 function migrateStore(): void {
   const settings = store.get('settings');

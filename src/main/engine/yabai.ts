@@ -22,6 +22,7 @@ interface YabaiSpace {
 
 export interface YabaiWindow {
   app: string;
+  pid: number;
   title: string;
   frame: { x: number; y: number; w: number; h: number };
   display: number; // yabai display index

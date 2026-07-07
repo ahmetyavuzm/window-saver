@@ -5,6 +5,7 @@ import { handlePositionWindow } from './handlers/positionWindow.js';
 import { handleOpenUrl } from './handlers/openUrl.js';
 import { handleOpenTerminal } from './handlers/openTerminal.js';
 import { handleWait } from './handlers/wait.js';
+import { createDesktopViaMissionControl } from './missioncontrol.js';
 import * as registry from './registry.js';
 import type { StepResult } from './types.js';
 
@@ -22,8 +23,37 @@ const handlers: Partial<Record<Step['type'], Handler>> = {
 // types default to letting the rest of the profile continue.
 const ABORT_ON_FAILURE: Set<Step['type']> = new Set(['launchApp', 'waitForWindow']);
 
+// Does this profile open at least one *windowed* (non native-fullscreen) window?
+// A native-fullscreen app gets its OWN macOS Space automatically, so it never
+// lands on the "clean slate" desktop that 'createNew' adds. If every window in
+// the profile is fullscreen, that new desktop would just be an empty orphan
+// (created on whichever display Mission Control shows), so the caller skips it.
+function hasWindowedTarget(profile: Profile): boolean {
+  // Only *native* fullscreen takes its own Space; a 'maximize' box stays a
+  // normal window that lands on (and benefits from) the fresh desktop.
+  const isNativeFullscreen = (s: Step): boolean =>
+    s.type === 'positionWindow' && s.fullscreen === true && s.fullscreenMode !== 'maximize';
+
+  const nativeFullscreenGroups = new Set<string>();
+  for (const s of profile.steps) {
+    if (isNativeFullscreen(s) && 'groupId' in s && s.groupId) nativeFullscreenGroups.add(s.groupId);
+  }
+  for (const s of profile.steps) {
+    // Browser windows (openUrl) are always windowed.
+    if (s.type === 'openUrl') return true;
+    // Any placement that isn't native fullscreen is a windowed target.
+    if (s.type === 'positionWindow' && !isNativeFullscreen(s)) return true;
+    // A launched app / terminal is windowed unless its group is native fullscreen.
+    if (s.type === 'launchApp' || s.type === 'openTerminal') {
+      if (!s.groupId || !nativeFullscreenGroups.has(s.groupId)) return true;
+    }
+  }
+  return false;
+}
+
 export async function runProfile(
   profile: Profile,
+  options?: { createNewDesktop?: boolean },
   onLog?: (entry: LogEntry) => void,
 ): Promise<RunResult> {
   const log: LogEntry[] = [];
@@ -37,6 +67,23 @@ export async function runProfile(
     log.push(entry);
     onLog?.(entry);
   };
+
+  // desktopMode 'createNew': add a fresh desktop (Mission Control "+") before
+  // anything launches, so the workspace gets a clean slate. Best-effort and
+  // SIP-free; failure is logged but never aborts the run. Skipped when every
+  // window is fullscreen (each already gets its own Space — a new desktop would
+  // just be an empty orphan on some display).
+  if (options?.createNewDesktop && hasWindowedTarget(profile)) {
+    const res = await createDesktopViaMissionControl();
+    emit({
+      stepId: 'desktop',
+      status: res.created ? 'ok' : 'error',
+      message: res.created
+        ? 'Yeni masaüstü oluşturuldu (Mission Control). Pencereleri sürükleyerek yerleştirebilirsiniz.'
+        : `Yeni masaüstü oluşturulamadı: ${res.error ?? 'bilinmeyen hata'}`,
+      timestamp: new Date().toISOString(),
+    });
+  }
 
   // A grouped openTerminal step captures the exact id of the Terminal window it
   // opened; the group's positionWindow step reuses that id to place precisely

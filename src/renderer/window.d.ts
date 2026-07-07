@@ -29,12 +29,14 @@ export interface WindowSaverApi {
   getSettings(): Promise<Settings>;
   updateSettings(partial: Partial<UserSettings>): Promise<Settings>;
   listDisplays(): Promise<DisplayInfo[]>;
+  listApps(): Promise<string[]>;
   isYabaiAvailable(): Promise<boolean>;
   onDisplaysChanged(cb: (displays: DisplayInfo[]) => void): () => void;
   ensureDesktops(
     displayBounds: { x: number; y: number },
     target: number,
   ): Promise<{ created: number; needsScriptingAddition: boolean }>;
+  createDesktop(): Promise<{ created: boolean; error?: string }>;
   captureWindows(): Promise<CapturedWindow[]>;
   createProfileFromWindows(name: string, windows: CapturedWindow[]): Promise<Profile | undefined>;
 }

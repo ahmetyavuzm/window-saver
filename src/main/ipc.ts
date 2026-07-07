@@ -5,9 +5,11 @@ import { rebuildTrayMenu } from './tray.js';
 import { reregisterHotkeys } from './hotkeys.js';
 import { checkPermissions, PERMISSION_SETTINGS_URLS } from './permissions.js';
 import { listDisplays } from './displays.js';
+import { listInstalledApps } from './apps.js';
 import * as registry from './engine/registry.js';
 import { terminateTarget } from './engine/terminate.js';
 import { isYabaiAvailable, ensureSpacesOnDisplay } from './engine/yabai.js';
+import { createDesktopViaMissionControl } from './engine/missioncontrol.js';
 import { captureWindows, stepsFromCapturedWindows } from './engine/capture.js';
 import type { CapturedWindow, Step, StopResult, UserSettings } from '../shared/types.js';
 
@@ -45,7 +47,8 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('profiles:run', async (_event, profileId: string) => {
     const profile = store.getProfile(profileId);
     if (!profile) return { profileId, ok: false, log: [], hasTrackedTargets: false };
-    return runProfile(profile);
+    const createNewDesktop = store.getSettings().desktopMode === 'createNew';
+    return runProfile(profile, { createNewDesktop });
   });
   ipcMain.handle('profiles:stop', async (_event, profileId: string): Promise<StopResult> => {
     const targets = registry.getTracked(profileId);
@@ -75,6 +78,8 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('displays:list', () => listDisplays());
 
+  ipcMain.handle('apps:list', () => listInstalledApps());
+
   ipcMain.handle('yabai:isAvailable', () => isYabaiAvailable());
 
   ipcMain.handle(
@@ -82,6 +87,10 @@ export function registerIpcHandlers(): void {
     (_event, displayBounds: { x: number; y: number }, target: number) =>
       ensureSpacesOnDisplay(displayBounds, target),
   );
+
+  // SIP-free desktop creation via Mission Control's "+" (AX). Lands on the
+  // active display; the user drags it/windows to the target screen.
+  ipcMain.handle('desktops:createNew', () => createDesktopViaMissionControl());
 
   ipcMain.handle('windows:capture', () => captureWindows());
 

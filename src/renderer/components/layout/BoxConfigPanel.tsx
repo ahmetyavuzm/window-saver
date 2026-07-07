@@ -10,6 +10,8 @@ interface Props {
   onSave: (config: BoxConfig) => void;
   onCancel: () => void;
   onDelete?: () => void;
+  // Installed app names for the Launch App picker (native datalist autocomplete).
+  installedApps?: string[];
   // Screen (display) assignment — only supplied when editing an existing box.
   displays?: DisplayInfo[];
   displayId?: number;
@@ -25,6 +27,7 @@ export function BoxConfigPanel({
   onSave,
   onCancel,
   onDelete,
+  installedApps,
   displays,
   displayId,
   onDisplayChange,
@@ -36,25 +39,37 @@ export function BoxConfigPanel({
   const [launchApp, setLaunchApp] = useState<LaunchAppValue>({
     appName: initial.appName ?? '',
     autoInsertWait: initial.autoInsertWait ?? true,
+    openNewWindow: initial.openNewWindow ?? false,
   });
   const [openUrl, setOpenUrl] = useState<OpenUrlValue>({
     url: initial.url ?? '',
     browser: initial.browser && initial.browser !== 'default' ? initial.browser : 'Google Chrome',
+    newWindow: initial.newWindow ?? false,
   });
   const [openTerminal, setOpenTerminal] = useState<OpenTerminalValue>({
     cwd: initial.cwd ?? '',
     command: initial.command ?? '',
   });
   const [fullscreen, setFullscreen] = useState<boolean>(initial.fullscreen ?? false);
+  const [fullscreenMode, setFullscreenMode] = useState<'native' | 'maximize'>(
+    initial.fullscreenMode ?? 'native',
+  );
 
   function handleSave(e: React.FormEvent) {
     e.preventDefault();
+    const fs = { fullscreen, ...(fullscreen ? { fullscreenMode } : {}) };
     if (kind === 'launchApp') {
-      onSave({ kind, appName: launchApp.appName, autoInsertWait: launchApp.autoInsertWait, fullscreen });
+      onSave({
+        kind,
+        appName: launchApp.appName,
+        autoInsertWait: launchApp.autoInsertWait,
+        openNewWindow: launchApp.openNewWindow,
+        ...fs,
+      });
     } else if (kind === 'openUrl') {
-      onSave({ kind, url: openUrl.url, browser: openUrl.browser, fullscreen });
+      onSave({ kind, url: openUrl.url, browser: openUrl.browser, newWindow: openUrl.newWindow, ...fs });
     } else {
-      onSave({ kind, cwd: openTerminal.cwd, command: openTerminal.command || undefined, fullscreen });
+      onSave({ kind, cwd: openTerminal.cwd, command: openTerminal.command || undefined, ...fs });
     }
   }
 
@@ -67,7 +82,9 @@ export function BoxConfigPanel({
           <option value="openUrl">Open URL</option>
           <option value="openTerminal">Open Terminal</option>
         </select>
-        {kind === 'launchApp' && <LaunchAppFields value={launchApp} onChange={setLaunchApp} />}
+        {kind === 'launchApp' && (
+          <LaunchAppFields value={launchApp} onChange={setLaunchApp} installedApps={installedApps} />
+        )}
         {kind === 'openUrl' && <OpenUrlFields value={openUrl} onChange={setOpenUrl} allowDefaultBrowser={false} />}
         {kind === 'openTerminal' && <OpenTerminalFields value={openTerminal} onChange={setOpenTerminal} />}
         {displays && displayId !== undefined && onDisplayChange && (
@@ -96,8 +113,30 @@ export function BoxConfigPanel({
         )}
         <label className="box-config-fullscreen">
           <input type="checkbox" checked={fullscreen} onChange={(e) => setFullscreen(e.target.checked)} />
-          Fullscreen (open as full screen)
+          Fullscreen (fill the display)
         </label>
+        {fullscreen && (
+          <div className="box-config-fs-mode">
+            <label>
+              <input
+                type="radio"
+                name="fullscreenMode"
+                checked={fullscreenMode === 'native'}
+                onChange={() => setFullscreenMode('native')}
+              />
+              Native fullscreen <span className="box-config-fs-hint">— own Space, not draggable</span>
+            </label>
+            <label>
+              <input
+                type="radio"
+                name="fullscreenMode"
+                checked={fullscreenMode === 'maximize'}
+                onChange={() => setFullscreenMode('maximize')}
+              />
+              Maximize <span className="box-config-fs-hint">— fills screen, keeps title bar, draggable</span>
+            </label>
+          </div>
+        )}
         <div className="box-config-actions">
           {onDelete && (
             <button type="button" className="box-config-delete" onClick={onDelete}>

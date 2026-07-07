@@ -18,7 +18,20 @@ export interface WindowPlacement {
 }
 
 export type Step =
-  | { type: 'launchApp'; id: string; appName: string; bundleId?: string; args?: string[]; groupId?: string }
+  | {
+      type: 'launchApp';
+      id: string;
+      appName: string;
+      bundleId?: string;
+      args?: string[];
+      /**
+       * Force a new instance/window even if the app is already running
+       * (`open -n`). Default false: `open` just brings the running app forward,
+       * and positionWindow re-uses its existing window.
+       */
+      openNewWindow?: boolean;
+      groupId?: string;
+    }
   | { type: 'waitForWindow'; id: string; appName: string; timeoutMs?: number; groupId?: string }
   | {
       type: 'positionWindow';
@@ -35,11 +48,19 @@ export type Step =
        */
       desktopIndex?: number;
       /**
-       * Open the window as native (macOS) fullscreen on its target display
-       * instead of applying `placement.rect`. A fullscreen window occupies the
-       * whole display, so the rect/position is ignored at run time.
+       * Open the window filling its target display instead of applying an
+       * arbitrary `placement.rect`. How it fills is set by `fullscreenMode`.
        */
       fullscreen?: boolean;
+      /**
+       * How a `fullscreen` box fills the display:
+       *  - 'native' (default when unset): macOS native fullscreen. The window
+       *    gets its OWN Space, loses its title bar, and can't be dragged.
+       *  - 'maximize': resize the window to fill the display's workArea but keep
+       *    the title bar, so it stays a normal, draggable window on the current
+       *    desktop (and can still be moved to a `desktopIndex`).
+       */
+      fullscreenMode?: 'native' | 'maximize';
       groupId?: string;
     }
   | {
@@ -72,6 +93,17 @@ export type ThemeMode = 'system' | 'light' | 'dark';
  */
 export type DesktopLayoutMode = 'tabs' | 'grid';
 
+/**
+ * What a profile run does about desktops (macOS Spaces):
+ *  - 'reuse' (default): work on the existing desktop(s) already on screen —
+ *    windows are placed on their current/target desktop, none is created.
+ *  - 'createNew': at the start of each run, add a fresh desktop via Mission
+ *    Control's "+" (SIP-free, on the active display) so the workspace gets a
+ *    clean slate. Programmatic per-display placement still needs yabai; without
+ *    it you drag the windows onto the new desktop manually.
+ */
+export type DesktopMode = 'reuse' | 'createNew';
+
 export interface Settings {
   onboardingComplete: boolean;
   schemaVersion: number;
@@ -81,10 +113,12 @@ export interface Settings {
   accentColor: string;
   /** Tabs (one desktop at a time) vs. grid (all desktops side by side). */
   desktopLayout: DesktopLayoutMode;
+  /** Reuse existing desktops vs. create a fresh one on each run. */
+  desktopMode: DesktopMode;
 }
 
 /** The subset of settings the user can change from the Settings UI. */
-export type UserSettings = Pick<Settings, 'theme' | 'accentColor' | 'desktopLayout'>;
+export type UserSettings = Pick<Settings, 'theme' | 'accentColor' | 'desktopLayout' | 'desktopMode'>;
 
 export interface StoreSchema {
   profiles: Profile[];
@@ -136,6 +170,13 @@ export interface DisplayInfo {
  */
 export interface CapturedWindow {
   appName: string;
+  /**
+   * Bundle identifier (e.g. "com.microsoft.VSCode"), resolved at capture time.
+   * yabai's `app` is the *process* name ("Code"), which `open -a` often can't
+   * find — the app's real name is different ("Visual Studio Code"). Launching by
+   * bundle id (`open -b`) is name-independent, so we prefer it when available.
+   */
+  bundleId?: string;
   title: string;
   displayId: number; // Electron display id
   rect: NormalizedRect;

@@ -26,17 +26,17 @@ export function ProfileList({ profiles, selectedId, onSelect, onCreate, onDelete
     <div className="profile-list">
       <div className="profile-list-header">
         <h2>Profiles</h2>
-        <div className="profile-list-actions">
-          <button
-            className="secondary"
-            title="Create a profile from the windows currently open on screen"
-            onClick={onSaveWindows}
-          >
-            Save Windows
-          </button>
-          <button onClick={() => setAdding(true)}>+ New</button>
-        </div>
+        <button className="new-profile-btn" onClick={() => setAdding(true)}>
+          + New
+        </button>
       </div>
+      <button
+        className="sidebar-action"
+        title="Create a profile from the windows currently open on screen"
+        onClick={onSaveWindows}
+      >
+        <span aria-hidden="true">⧉</span> Save Windows
+      </button>
       {adding && (
         <input
           autoFocus
@@ -62,8 +62,12 @@ export function ProfileList({ profiles, selectedId, onSelect, onCreate, onDelete
             onClick={() => onSelect(profile.id)}
           >
             <span>{profile.name}</span>
+            <span className="profile-count" title={`${profile.steps.length} steps`}>
+              {profile.steps.length}
+            </span>
             <button
               className="delete-btn"
+              title="Delete profile"
               onClick={(e) => {
                 e.stopPropagation();
                 onDelete(profile.id);

@@ -33,12 +33,15 @@ const api = {
   updateSettings: (partial: Partial<UserSettings>): Promise<Settings> =>
     ipcRenderer.invoke('settings:update', partial),
   listDisplays: (): Promise<DisplayInfo[]> => ipcRenderer.invoke('displays:list'),
+  listApps: (): Promise<string[]> => ipcRenderer.invoke('apps:list'),
   isYabaiAvailable: (): Promise<boolean> => ipcRenderer.invoke('yabai:isAvailable'),
   ensureDesktops: (
     displayBounds: { x: number; y: number },
     target: number,
   ): Promise<{ created: number; needsScriptingAddition: boolean }> =>
     ipcRenderer.invoke('desktops:ensureOnDisplay', displayBounds, target),
+  createDesktop: (): Promise<{ created: boolean; error?: string }> =>
+    ipcRenderer.invoke('desktops:createNew'),
   captureWindows: (): Promise<CapturedWindow[]> => ipcRenderer.invoke('windows:capture'),
   createProfileFromWindows: (name: string, windows: CapturedWindow[]): Promise<Profile | undefined> =>
     ipcRenderer.invoke('profiles:createFromWindows', name, windows),
