@@ -5,10 +5,10 @@ import type { TrackedTarget } from './registry.js';
 // stripped before the entry is emitted as a LogEntry — it never reaches the
 // renderer.
 export type StepResult = Omit<LogEntry, 'stepId' | 'timestamp'> & {
-  // windowTitleHint lets a launch-like step (currently just openTerminal) tell
-  // a later positionWindow step in the same group exactly which OS window it
-  // opened, via title match — System Events UI-element windows have no `id`
-  // property, so a captured numeric id (e.g. Terminal's own AppleScript
-  // window id) can't be used as a System Events window reference.
-  meta?: { target?: TrackedTarget; windowTitleHint?: string };
+  // windowIdHint lets openTerminal tell a later positionWindow step in the
+  // same group exactly which Terminal window it opened. Terminal is positioned
+  // through its own AppleScript (`position`/`size` by `window id`), which is
+  // reliable where System Events is not (System Events refuses to move/resize
+  // Terminal windows, -10006), so the numeric id is exactly what's needed.
+  meta?: { target?: TrackedTarget; windowIdHint?: number };
 };

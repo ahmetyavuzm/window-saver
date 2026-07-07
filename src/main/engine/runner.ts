@@ -38,20 +38,17 @@ export async function runProfile(
     onLog?.(entry);
   };
 
-  // "window 1 of process" is frontmost-window-at-call-time, not necessarily
-  // the window a preceding step in this same box just opened — if some other
-  // window of that app raises in between, positionWindow would silently act
-  // on the wrong one. Steps sharing a groupId with a launch-like step (e.g.
-  // openTerminal) reuse its captured window title instead of guessing
-  // "window 1" — System Events window elements have no `id` property, so a
-  // captured numeric id can't be used as a System Events window reference.
-  const windowTitleByGroup = new Map<string, string>();
+  // A grouped openTerminal step captures the exact id of the Terminal window it
+  // opened; the group's positionWindow step reuses that id to place precisely
+  // the right window via Terminal's own AppleScript, rather than guessing
+  // "window 1" (which is only frontmost-at-call-time and can be a stale window).
+  const windowIdByGroup = new Map<string, number>();
 
   for (const step of profile.steps) {
     if (step.type === 'positionWindow') {
-      const knownWindowTitle = step.groupId ? windowTitleByGroup.get(step.groupId) : undefined;
+      const knownWindowId = step.groupId ? windowIdByGroup.get(step.groupId) : undefined;
       emit({ stepId: step.id, status: 'running', message: `Running ${step.type}`, timestamp: new Date().toISOString() });
-      const result = await handlePositionWindow(step, knownWindowTitle);
+      const result = await handlePositionWindow(step, knownWindowId);
       const entry: LogEntry = { stepId: step.id, timestamp: new Date().toISOString(), ...result };
       emit(entry);
       if (result.status === 'error') ok = false;
@@ -78,8 +75,8 @@ export async function runProfile(
     if (result.meta?.target) {
       registry.track(profile.id, result.meta.target);
     }
-    if (result.meta?.windowTitleHint && groupId) {
-      windowTitleByGroup.set(groupId, result.meta.windowTitleHint);
+    if (result.meta?.windowIdHint !== undefined && groupId) {
+      windowIdByGroup.set(groupId, result.meta.windowIdHint);
     }
     const { meta: _meta, ...logFields } = result;
     const entry: LogEntry = { stepId: step.id, timestamp: new Date().toISOString(), ...logFields };
