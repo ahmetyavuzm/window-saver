@@ -1,4 +1,4 @@
-import type { ThemeMode, UserSettings } from '../../../shared/types';
+import type { DesktopLayoutMode, ThemeMode, UserSettings } from '../../../shared/types';
 
 interface Props {
   settings: UserSettings;
@@ -10,6 +10,11 @@ const THEME_OPTIONS: { value: ThemeMode; label: string }[] = [
   { value: 'light', label: 'Light' },
   { value: 'dark', label: 'Dark' },
   { value: 'system', label: 'System' },
+];
+
+const DESKTOP_LAYOUT_OPTIONS: { value: DesktopLayoutMode; label: string }[] = [
+  { value: 'tabs', label: 'Tabs' },
+  { value: 'grid', label: 'Side by side' },
 ];
 
 // A handful of tasteful presets; the color input covers everything else.
@@ -42,6 +47,21 @@ export function SettingsPanel({ settings, onUpdate, onClose }: Props) {
                     key={opt.value}
                     className={`segmented-option${settings.theme === opt.value ? ' active' : ''}`}
                     onClick={() => onUpdate({ theme: opt.value })}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="settings-field">
+              <label>Desktop layout</label>
+              <div className="segmented">
+                {DESKTOP_LAYOUT_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    className={`segmented-option${settings.desktopLayout === opt.value ? ' active' : ''}`}
+                    onClick={() => onUpdate({ desktopLayout: opt.value })}
                   >
                     {opt.label}
                   </button>

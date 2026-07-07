@@ -244,6 +244,33 @@ input:focus, select:focus {
 .window-box-delete:hover { background: var(--danger); }
 
 /* ---------------------------------------------------------------------------
+   Desktop grid ("side by side" layout): one row per display, its desktops as
+   separate frames. Reuses .display-frame / .window-box for the frames + boxes.
+--------------------------------------------------------------------------- */
+.desktop-grid { display: flex; flex-direction: column; gap: 18px; }
+.desktop-grid-row { display: flex; align-items: flex-start; gap: 10px; }
+.desktop-grid-screen {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted);
+  min-width: 74px; flex-shrink: 0; padding-top: 4px;
+}
+.desktop-grid-frames { display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap; }
+.desktop-grid-frame { display: flex; flex-direction: column; gap: 4px; }
+.desktop-grid-frame-header { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.desktop-grid-frame-title { font-size: 11px; color: var(--text-muted); }
+.desktop-grid-frame-actions { display: inline-flex; align-items: center; gap: 2px; }
+.desktop-grid-add-window {
+  width: 18px; height: 18px; padding: 0; line-height: 1; font-size: 14px;
+  color: var(--text-muted); background: transparent; border: 1px solid transparent; border-radius: 50%;
+}
+.desktop-grid-add-window:hover { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-ring); }
+.desktop-grid-canvas { background: var(--surface-3); }
+.desktop-grid-add-desktop {
+  align-self: center; color: var(--text-muted); font-size: 15px; line-height: 1;
+  padding: 6px 12px; border: 1px dashed var(--border); border-radius: var(--radius-sm); background: transparent;
+}
+.desktop-grid-add-desktop:hover { background: var(--surface-2); color: var(--text); border-color: var(--border-strong); }
+
+/* ---------------------------------------------------------------------------
    Run console
 --------------------------------------------------------------------------- */
 .run-console {

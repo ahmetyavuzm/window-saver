@@ -2,13 +2,14 @@ import Store from 'electron-store';
 import { randomUUID } from 'node:crypto';
 import type { Profile, Settings, StoreSchema, Step, UserSettings } from '../shared/types.js';
 
-const CURRENT_SCHEMA_VERSION = 4;
+const CURRENT_SCHEMA_VERSION = 5;
 
 const DEFAULT_SETTINGS: Settings = {
   onboardingComplete: false,
   schemaVersion: CURRENT_SCHEMA_VERSION,
   theme: 'system',
   accentColor: '#0a84ff',
+  desktopLayout: 'grid',
 };
 
 const store = new Store<StoreSchema>({
@@ -32,6 +33,9 @@ migrateStore();
  *    at run time). Carry the number over — single-display setups stay correct; any
  *    pre-existing multi-display assignment may point at a different desktop and can
  *    be reassigned from the UI.
+ *  - v4 -> v5: desktopLayout setting ('tabs' | 'grid'). Purely additive — the
+ *    DEFAULT_SETTINGS spread below fills the default ('grid') for any store
+ *    written before v5.
  */
 function migrateStore(): void {
   const settings = store.get('settings');

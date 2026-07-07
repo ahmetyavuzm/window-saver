@@ -173,6 +173,23 @@ export function updateBoxConfig(steps: Step[], groupId: string, config: BoxConfi
   return [...before, ...built, updatedPosition, ...after];
 }
 
+// Re-target the box's window to a different display. The rect is a workArea-
+// relative NormalizedRect (display-independent), so only placement.display
+// changes — same shape createBoxSteps builds. Desktops are per-display, so
+// callers typically clear/reset desktopIndex separately (see App.onDisplayChange).
+export function updateBoxDisplay(steps: Step[], groupId: string, display: DisplayInfo): Step[] {
+  return steps.map((step) => {
+    if (step.type !== 'positionWindow' || step.groupId !== groupId || !step.placement) return step;
+    return {
+      ...step,
+      placement: {
+        ...step.placement,
+        display: { displayId: display.id, widthPx: display.bounds.width, heightPx: display.bounds.height },
+      },
+    };
+  });
+}
+
 export function updateBoxRect(steps: Step[], groupId: string, rect: NormalizedRect): Step[] {
   return steps.map((step) => {
     if (step.type !== 'positionWindow' || step.groupId !== groupId || !step.placement) return step;

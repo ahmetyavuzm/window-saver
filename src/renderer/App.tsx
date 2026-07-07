@@ -8,8 +8,10 @@ import {
   updateBoxConfig,
   updateBoxRect,
   updateBoxDesktop,
+  updateBoxDisplay,
   deleteBox,
   type BoxConfig,
+  type LayoutBox,
 } from './hooks/useLayoutBoxes';
 import { ProfileList } from './components/ProfileList';
 import { StepList } from './components/StepList';
@@ -18,6 +20,7 @@ import { LayoutCanvas } from './components/layout/LayoutCanvas';
 import { WindowBox } from './components/layout/WindowBox';
 import { BoxConfigPanel } from './components/layout/BoxConfigPanel';
 import { DesktopTabs, type DesktopSelection } from './components/layout/DesktopTabs';
+import { DesktopGrid } from './components/layout/DesktopGrid';
 import { SettingsPanel } from './components/settings/SettingsPanel';
 import type { Step, RunResult, DisplayInfo } from '../shared/types';
 
@@ -26,9 +29,6 @@ const DEFAULT_NEW_BOX_CONFIG: BoxConfig = { kind: 'launchApp', appName: '', auto
 // Desktops are per-display: each screen has its own Desktop 1,2,3…. Desktop 1
 // (and "All") is the default with no yabai Space move → stored desktopIndex
 // undefined; Desktop N>1 stores N and is resolved to a global Space at run time.
-function activeToStored(d: DesktopSelection): number | undefined {
-  return d === 'all' || d === 1 ? undefined : d;
-}
 const boxDesktop = (desktopIndex?: number): number => desktopIndex ?? 1;
 
 interface ConfigTarget {
@@ -36,6 +36,7 @@ interface ConfigTarget {
   display: DisplayInfo;
   config: BoxConfig;
   desktopIndex?: number; // current desktop of an existing box (within its display)
+  createDesktop?: number; // for a new box: which desktop of its display to create it on (1-based)
 }
 
 export function App() {
@@ -56,6 +57,7 @@ export function App() {
   const [yabaiAvailable, setYabaiAvailable] = useState<boolean | null>(null);
   const displays = useDisplays();
   const { settings, updateSettings } = useSettings();
+  const desktopLayout = settings?.desktopLayout ?? 'grid';
 
   useEffect(() => {
     void window.windowSaver.isYabaiAvailable().then(setYabaiAvailable);
@@ -146,19 +148,69 @@ export function App() {
   function handleAddBox() {
     const display = displays.find((d) => d.id === newBoxDisplayId) ?? displays[0];
     if (!display) return;
-    setConfigTarget({ groupId: null, display, config: DEFAULT_NEW_BOX_CONFIG });
+    // Tabs mode: new box inherits the display's active desktop.
+    const active = activeDesktopFor(display.id);
+    setConfigTarget({
+      groupId: null,
+      display,
+      config: DEFAULT_NEW_BOX_CONFIG,
+      createDesktop: active === 'all' ? 1 : active,
+    });
+  }
+
+  // Grid mode: "Add window" on a specific desktop frame creates the box there.
+  function handleAddBoxOnDesktop(display: DisplayInfo, desktop: number) {
+    setConfigTarget({ groupId: null, display, config: DEFAULT_NEW_BOX_CONFIG, createDesktop: desktop });
   }
 
   function handleSaveConfig(config: BoxConfig) {
     if (!selected || !configTarget) return;
     if (configTarget.groupId === null) {
-      // New boxes inherit the active desktop of the display they're placed on.
-      const desktopIndex = activeToStored(activeDesktopFor(configTarget.display.id));
+      // Desktop 1 (or unset) stores undefined (no yabai move); N>1 stores N.
+      const target = configTarget.createDesktop ?? 1;
+      const desktopIndex = target > 1 ? target : undefined;
       handleStepsChange(createBoxSteps(selected.steps, configTarget.display, config, desktopIndex));
     } else {
       handleStepsChange(updateBoxConfig(selected.steps, configTarget.groupId, config));
     }
     setConfigTarget(null);
+  }
+
+  // Renders one box; shared by the tabbed union canvas and the desktop grid so
+  // click/drag/delete behave identically. `scale` differs per host (canvas vs.
+  // per-desktop frame); parent size derives from the display's workArea.
+  function renderBox(box: LayoutBox, display: DisplayInfo, scale: number) {
+    return (
+      <WindowBox
+        key={box.groupId}
+        rect={box.rect}
+        parentWidth={display.workArea.width * scale}
+        parentHeight={display.workArea.height * scale}
+        label={box.label}
+        onClick={() =>
+          setConfigTarget({ groupId: box.groupId, display, config: box.config, desktopIndex: box.desktopIndex })
+        }
+        onChange={(next) => {
+          if (!selected) return;
+          handleStepsChange(updateBoxRect(selected.steps, box.groupId, next));
+        }}
+        onDelete={() => {
+          if (!selected) return;
+          handleStepsChange(deleteBox(selected.steps, box.groupId));
+        }}
+      />
+    );
+  }
+
+  // Re-target an existing box to another screen. Desktops are per-display, so
+  // the assignment is reset to Desktop 1 (undefined) on the new screen.
+  function handleBoxDisplayChange(groupId: string, displayId: number) {
+    if (!selected) return;
+    const display = displays.find((d) => d.id === displayId);
+    if (!display) return;
+    const moved = updateBoxDesktop(updateBoxDisplay(selected.steps, groupId, display), groupId, undefined);
+    handleStepsChange(moved);
+    setConfigTarget((prev) => (prev ? { ...prev, display, desktopIndex: undefined } : prev));
   }
 
   function setActiveDesktop(displayId: number, sel: DesktopSelection) {
@@ -243,80 +295,73 @@ export function App() {
             </div>
             <div className="layout-canvas-wrap">
               <h2>Screens</h2>
-              {displays.length > 0 && (
-                <div className="desktop-tabs-panel">
-                  {displays.map((d) => (
-                    <div className="desktop-tabs-row" key={d.id}>
-                      <span className="desktop-tabs-screen">
-                        {d.isPrimary ? 'Primary' : `Display ${d.id}`}
-                      </span>
-                      <DesktopTabs
-                        desktops={desktopsFor(d.id)}
-                        active={activeDesktopFor(d.id)}
-                        deletableDesktop={deletableDesktopFor(d.id)}
-                        onSelect={(sel) => setActiveDesktop(d.id, sel)}
-                        onAdd={() => handleAddDesktop(d.id)}
-                        onDelete={(dd) => handleDeleteDesktop(d.id, dd)}
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
               {showYabaiWarning && (
                 <div className="yabai-banner" role="alert">
                   Multi-desktop placement needs <strong>yabai</strong>. Install it and grant Accessibility,
                   or these windows will stay on the current desktop.
                 </div>
               )}
-              <div className="layout-canvas-toolbar">
-                <select
-                  value={newBoxDisplayId ?? ''}
-                  onChange={(e) => setNewBoxDisplayId(Number(e.target.value))}
-                >
-                  {displays.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.isPrimary ? 'Primary' : `Display ${d.id}`} ({d.bounds.width}x{d.bounds.height})
-                    </option>
-                  ))}
-                </select>
-                <button onClick={handleAddBox} disabled={!displays.length}>
-                  Add window
-                </button>
-              </div>
-              <LayoutCanvas
-                displays={displays}
-                renderBoxes={(display, scale) => (
-                  <>
-                    {boxesOnDisplay(display.id)
-                      .filter((box) => boxVisibleOnDisplay(box))
-                      .map((box) => (
-                        <WindowBox
-                          key={box.groupId}
-                          rect={box.rect}
-                          parentWidth={display.workArea.width * scale}
-                          parentHeight={display.workArea.height * scale}
-                          label={box.label}
-                          onClick={() =>
-                            setConfigTarget({
-                              groupId: box.groupId,
-                              display,
-                              config: box.config,
-                              desktopIndex: box.desktopIndex,
-                            })
-                          }
-                          onChange={(next) => {
-                            if (!selected) return;
-                            handleStepsChange(updateBoxRect(selected.steps, box.groupId, next));
-                          }}
-                          onDelete={() => {
-                            if (!selected) return;
-                            handleStepsChange(deleteBox(selected.steps, box.groupId));
-                          }}
-                        />
+              {desktopLayout === 'grid' ? (
+                <DesktopGrid
+                  displays={displays}
+                  desktopsFor={desktopsFor}
+                  boxesFor={(id, desktop) =>
+                    boxesOnDisplay(id).filter((b) => boxDesktop(b.desktopIndex) === desktop)
+                  }
+                  renderBox={renderBox}
+                  deletableDesktopFor={deletableDesktopFor}
+                  onAddDesktop={handleAddDesktop}
+                  onDeleteDesktop={handleDeleteDesktop}
+                  onAddWindow={handleAddBoxOnDesktop}
+                />
+              ) : (
+                <>
+                  {displays.length > 0 && (
+                    <div className="desktop-tabs-panel">
+                      {displays.map((d) => (
+                        <div className="desktop-tabs-row" key={d.id}>
+                          <span className="desktop-tabs-screen">
+                            {d.isPrimary ? 'Primary' : `Display ${d.id}`}
+                          </span>
+                          <DesktopTabs
+                            desktops={desktopsFor(d.id)}
+                            active={activeDesktopFor(d.id)}
+                            deletableDesktop={deletableDesktopFor(d.id)}
+                            onSelect={(sel) => setActiveDesktop(d.id, sel)}
+                            onAdd={() => handleAddDesktop(d.id)}
+                            onDelete={(dd) => handleDeleteDesktop(d.id, dd)}
+                          />
+                        </div>
                       ))}
-                  </>
-                )}
-              />
+                    </div>
+                  )}
+                  <div className="layout-canvas-toolbar">
+                    <select
+                      value={newBoxDisplayId ?? ''}
+                      onChange={(e) => setNewBoxDisplayId(Number(e.target.value))}
+                    >
+                      {displays.map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.isPrimary ? 'Primary' : `Display ${d.id}`} ({d.bounds.width}x{d.bounds.height})
+                        </option>
+                      ))}
+                    </select>
+                    <button onClick={handleAddBox} disabled={!displays.length}>
+                      Add window
+                    </button>
+                  </div>
+                  <LayoutCanvas
+                    displays={displays}
+                    renderBoxes={(display, scale) => (
+                      <>
+                        {boxesOnDisplay(display.id)
+                          .filter((box) => boxVisibleOnDisplay(box))
+                          .map((box) => renderBox(box, display, scale))}
+                      </>
+                    )}
+                  />
+                </>
+              )}
             </div>
             {configTarget && (
               <BoxConfigPanel
@@ -329,6 +374,16 @@ export function App() {
                         if (!selected || !configTarget.groupId) return;
                         handleStepsChange(deleteBox(selected.steps, configTarget.groupId));
                         setConfigTarget(null);
+                      }
+                    : undefined
+                }
+                displays={configTarget.groupId ? displays : undefined}
+                displayId={configTarget.groupId ? configTarget.display.id : undefined}
+                onDisplayChange={
+                  configTarget.groupId
+                    ? (displayId) => {
+                        if (!configTarget.groupId) return;
+                        handleBoxDisplayChange(configTarget.groupId, displayId);
                       }
                     : undefined
                 }
@@ -368,7 +423,7 @@ export function App() {
       </div>
       {settingsOpen && settings && (
         <SettingsPanel
-          settings={{ theme: settings.theme, accentColor: settings.accentColor }}
+          settings={{ theme: settings.theme, accentColor: settings.accentColor, desktopLayout: settings.desktopLayout }}
           onUpdate={(partial) => void updateSettings(partial)}
           onClose={() => setSettingsOpen(false)}
         />

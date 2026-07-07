@@ -59,6 +59,13 @@ export interface Profile {
 
 export type ThemeMode = 'system' | 'light' | 'dark';
 
+/**
+ * How the layout builder presents a display's desktops:
+ *  - 'tabs': one canvas per display, active desktop chosen via tab strip (default).
+ *  - 'grid': every desktop shown as its own side-by-side frame.
+ */
+export type DesktopLayoutMode = 'tabs' | 'grid';
+
 export interface Settings {
   onboardingComplete: boolean;
   schemaVersion: number;
@@ -66,10 +73,12 @@ export interface Settings {
   theme: ThemeMode;
   /** Accent color as a hex string, e.g. "#0a84ff". */
   accentColor: string;
+  /** Tabs (one desktop at a time) vs. grid (all desktops side by side). */
+  desktopLayout: DesktopLayoutMode;
 }
 
 /** The subset of settings the user can change from the Settings UI. */
-export type UserSettings = Pick<Settings, 'theme' | 'accentColor'>;
+export type UserSettings = Pick<Settings, 'theme' | 'accentColor' | 'desktopLayout'>;
 
 export interface StoreSchema {
   profiles: Profile[];

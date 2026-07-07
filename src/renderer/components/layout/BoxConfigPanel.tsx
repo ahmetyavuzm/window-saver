@@ -3,12 +3,17 @@ import { LaunchAppFields, type LaunchAppValue } from '../fields/LaunchAppFields'
 import { OpenUrlFields, type OpenUrlValue } from '../fields/OpenUrlFields';
 import { OpenTerminalFields, type OpenTerminalValue } from '../fields/OpenTerminalFields';
 import type { BoxConfig, BoxKind } from '../../hooks/useLayoutBoxes';
+import type { DisplayInfo } from '../../../shared/types';
 
 interface Props {
   initial: BoxConfig;
   onSave: (config: BoxConfig) => void;
   onCancel: () => void;
   onDelete?: () => void;
+  // Screen (display) assignment — only supplied when editing an existing box.
+  displays?: DisplayInfo[];
+  displayId?: number;
+  onDisplayChange?: (displayId: number) => void;
   // Desktop (yabai Space) assignment — only supplied when editing an existing box.
   desktops?: number[];
   desktop?: number;
@@ -20,6 +25,9 @@ export function BoxConfigPanel({
   onSave,
   onCancel,
   onDelete,
+  displays,
+  displayId,
+  onDisplayChange,
   desktops,
   desktop,
   onDesktopChange,
@@ -61,6 +69,18 @@ export function BoxConfigPanel({
         {kind === 'launchApp' && <LaunchAppFields value={launchApp} onChange={setLaunchApp} />}
         {kind === 'openUrl' && <OpenUrlFields value={openUrl} onChange={setOpenUrl} allowDefaultBrowser={false} />}
         {kind === 'openTerminal' && <OpenTerminalFields value={openTerminal} onChange={setOpenTerminal} />}
+        {displays && displayId !== undefined && onDisplayChange && (
+          <label className="box-config-desktop">
+            Screen
+            <select value={displayId} onChange={(e) => onDisplayChange(Number(e.target.value))}>
+              {displays.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.isPrimary ? 'Primary' : `Display ${d.id}`} ({d.bounds.width}×{d.bounds.height})
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         {desktops && desktop !== undefined && onDesktopChange && (
           <label className="box-config-desktop">
             Desktop
