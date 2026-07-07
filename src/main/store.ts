@@ -2,7 +2,7 @@ import Store from 'electron-store';
 import { randomUUID } from 'node:crypto';
 import type { Profile, Settings, StoreSchema, Step, UserSettings } from '../shared/types.js';
 
-const CURRENT_SCHEMA_VERSION = 3;
+const CURRENT_SCHEMA_VERSION = 4;
 
 const DEFAULT_SETTINGS: Settings = {
   onboardingComplete: false,
@@ -27,10 +27,31 @@ migrateStore();
  *    profiles already satisfy the shape).
  *  - v2 -> v3: theme + accentColor settings. Fill any missing fields from
  *    DEFAULT_SETTINGS so stores written by an older version get sane values.
+ *  - v3 -> v4: positionWindow.spaceIndex (a raw global yabai Space index) becomes
+ *    desktopIndex (a per-display, 1-based desktop resolved to the real global Space
+ *    at run time). Carry the number over — single-display setups stay correct; any
+ *    pre-existing multi-display assignment may point at a different desktop and can
+ *    be reassigned from the UI.
  */
 function migrateStore(): void {
   const settings = store.get('settings');
   if (settings.schemaVersion >= CURRENT_SCHEMA_VERSION) return;
+
+  if (settings.schemaVersion < 4) {
+    const profiles = store.get('profiles');
+    let changed = false;
+    for (const profile of profiles) {
+      for (const step of profile.steps as Array<Step & { spaceIndex?: number }>) {
+        if (step.type !== 'positionWindow') continue;
+        if (step.spaceIndex === undefined) continue;
+        if (step.desktopIndex === undefined) step.desktopIndex = step.spaceIndex;
+        delete step.spaceIndex;
+        changed = true;
+      }
+    }
+    if (changed) store.set('profiles', profiles);
+  }
+
   store.set('settings', { ...DEFAULT_SETTINGS, ...settings, schemaVersion: CURRENT_SCHEMA_VERSION });
 }
 

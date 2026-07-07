@@ -27,7 +27,13 @@ export type Step =
       rectangleAction?: string;
       placement?: WindowPlacement;
       windowTitle?: string;
-      spaceIndex?: number;
+      /**
+       * Target desktop (macOS Space) **within this step's own display**, 1-based.
+       * undefined or 1 = leave the window on that display's current Space; ≥2 =
+       * move it to that display's Nth Space, resolved to yabai's global index at
+       * run time (global indices shift when desktops/displays change).
+       */
+      desktopIndex?: number;
       groupId?: string;
     }
   | {
