@@ -36,8 +36,10 @@ export interface YabaiWindow {
 
 const SCRIPTING_ADDITION_MESSAGE =
   'Masaüstü (Space) otomatik oluşturmak için yabai\'nin scripting-addition\'ı gerekli. ' +
-  'Terminal\'de "sudo yabai --load-sa" çalıştırın (ve gerekiyorsa kısmi SIP kapatın); ' +
-  'ardından tekrar deneyin. Bu olmadan masaüstlerini Mission Control\'den elle oluşturun.';
+  'Bunun için önce kısmi SIP kapatılmalı (Recovery > "csrutil disable" veya yabai\'nin ' +
+  'belgelediği kısmi kapatma), sonra Terminal\'de "sudo yabai --load-sa" çalıştırılmalı. ' +
+  'SIP açıkken macOS buna izin vermez; o durumda masaüstünü Mission Control\'den ' +
+  '(Ctrl+Yukarı Ok, sağ üstteki +) elle ekleyin.';
 
 // Match a physical display (by frame origin) to its yabai display. Nearest
 // origin wins so a small rounding/arrangement drift still resolves.

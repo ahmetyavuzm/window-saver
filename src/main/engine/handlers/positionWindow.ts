@@ -6,6 +6,7 @@ import {
   resolveDisplaySpaceIndex,
   moveFocusedWindowToSpace,
   fullscreenFocusedWindow,
+  ensureSpacesOnDisplay,
   YABAI_MISSING_MESSAGE,
 } from '../yabai.js';
 import { computeTargetBounds, resolveDisplayForPlacement, boundsFromNormalizedRect } from '../geometry.js';
@@ -35,9 +36,36 @@ function displayOriginForStep(step: PositionWindowStep): { x: number; y: number 
 
 function notEnoughDesktopsMessage(desktopIndex: number): string {
   return (
-    `Bu ekranda ${desktopIndex}. masaüstü bulunmuyor. Mission Control'den (Ctrl+Yukarı Ok) ` +
-    'o ekrana yeterli sayıda masaüstü ekleyip tekrar deneyin.'
+    `Bu ekranda ${desktopIndex}. masaüstü yok ve otomatik oluşturulamadı. ` +
+    'macOS, Space\'leri programla oluşturmaya yalnızca yabai\'nin scripting-addition\'ı ile ' +
+    'izin verir; bu da kısmi SIP kapatma (Recovery > "csrutil disable") + "sudo yabai --load-sa" ' +
+    'gerektirir. Bunları yapmadan masaüstünü Mission Control\'den (Ctrl+Yukarı Ok, sağ üstteki +) ' +
+    'elle ekleyip tekrar deneyin.'
   );
+}
+
+// Resolves the box's per-display desktop to a global yabai Space, creating any
+// missing real desktops first when possible. Creation is best-effort: it needs
+// yabai's scripting-addition (which needs partial SIP off), so on locked-down
+// machines this returns an actionable error instead of silently failing.
+// Returns `created` so callers can re-focus their window afterwards, since
+// creating Spaces changes which display/window yabai has focused.
+async function resolveOrCreateDesktop(
+  step: PositionWindowStep,
+): Promise<{ space: number; created: number } | { error: string }> {
+  const origin = displayOriginForStep(step);
+  const target = step.desktopIndex!;
+
+  let space = await resolveDisplaySpaceIndex(origin, target);
+  if (space !== null) return { space, created: 0 };
+
+  // Too few real desktops — try to create the missing ones.
+  const res = await ensureSpacesOnDisplay(origin, target);
+  if (res.needsScriptingAddition) return { error: notEnoughDesktopsMessage(target) };
+
+  space = await resolveDisplaySpaceIndex(origin, target);
+  if (space === null) return { error: notEnoughDesktopsMessage(target) };
+  return { space, created: res.created };
 }
 
 // Terminal windows can't be a target here through System Events: Terminal
@@ -149,6 +177,12 @@ async function positionTerminal(step: PositionWindowStep, knownWindowId?: number
     if (!(await isYabaiAvailable())) {
       return { status: 'error', message: YABAI_MISSING_MESSAGE };
     }
+    // Resolve/create the target desktop first — creation changes display focus,
+    // so bring our window to front only afterwards, right before the move.
+    const resolved = await resolveOrCreateDesktop(step);
+    if ('error' in resolved) {
+      return { status: 'error', message: resolved.error };
+    }
     // yabai moves the *focused* window, so bring exactly our window to front.
     await runAppleScript(`
       tell application "Terminal"
@@ -159,11 +193,7 @@ async function positionTerminal(step: PositionWindowStep, knownWindowId?: number
       end tell
     `);
     await sleep(200);
-    const globalSpace = await resolveDisplaySpaceIndex(displayOriginForStep(step), step.desktopIndex!);
-    if (globalSpace === null) {
-      return { status: 'error', message: notEnoughDesktopsMessage(step.desktopIndex!) };
-    }
-    await moveFocusedWindowToSpace(globalSpace);
+    await moveFocusedWindowToSpace(resolved.space);
     await sleep(300);
   }
 
@@ -279,11 +309,17 @@ async function positionGeneric(step: PositionWindowStep): Promise<StepLog> {
     if (!(await isYabaiAvailable())) {
       return { status: 'error', message: YABAI_MISSING_MESSAGE };
     }
-    const globalSpace = await resolveDisplaySpaceIndex(displayOriginForStep(step), step.desktopIndex!);
-    if (globalSpace === null) {
-      return { status: 'error', message: notEnoughDesktopsMessage(step.desktopIndex!) };
+    const resolved = await resolveOrCreateDesktop(step);
+    if ('error' in resolved) {
+      return { status: 'error', message: resolved.error };
     }
-    await moveFocusedWindowToSpace(globalSpace);
+    // Creating desktops changes display focus; re-activate our window so yabai
+    // moves the right one.
+    if (resolved.created > 0) {
+      await runAppleScript(`tell application "${toAppleScriptString(step.appName)}" to activate`);
+      await sleep(200);
+    }
+    await moveFocusedWindowToSpace(resolved.space);
     await sleep(300);
   }
 
