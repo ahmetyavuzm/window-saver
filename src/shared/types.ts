@@ -51,12 +51,23 @@ export interface Profile {
   updatedAt: string;
 }
 
+export type ThemeMode = 'system' | 'light' | 'dark';
+
+export interface Settings {
+  onboardingComplete: boolean;
+  schemaVersion: number;
+  /** Light / dark / follow-system appearance. */
+  theme: ThemeMode;
+  /** Accent color as a hex string, e.g. "#0a84ff". */
+  accentColor: string;
+}
+
+/** The subset of settings the user can change from the Settings UI. */
+export type UserSettings = Pick<Settings, 'theme' | 'accentColor'>;
+
 export interface StoreSchema {
   profiles: Profile[];
-  settings: {
-    onboardingComplete: boolean;
-    schemaVersion: number;
-  };
+  settings: Settings;
 }
 
 export interface LogEntry {

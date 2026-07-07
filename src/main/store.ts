@@ -1,31 +1,37 @@
 import Store from 'electron-store';
 import { randomUUID } from 'node:crypto';
-import type { Profile, StoreSchema, Step } from '../shared/types.js';
+import type { Profile, Settings, StoreSchema, Step, UserSettings } from '../shared/types.js';
 
-const CURRENT_SCHEMA_VERSION = 2;
+const CURRENT_SCHEMA_VERSION = 3;
+
+const DEFAULT_SETTINGS: Settings = {
+  onboardingComplete: false,
+  schemaVersion: CURRENT_SCHEMA_VERSION,
+  theme: 'system',
+  accentColor: '#0a84ff',
+};
 
 const store = new Store<StoreSchema>({
   name: 'config',
   defaults: {
     profiles: [],
-    settings: {
-      onboardingComplete: false,
-      schemaVersion: CURRENT_SCHEMA_VERSION,
-    },
+    settings: DEFAULT_SETTINGS,
   },
 });
 
 migrateStore();
 
 /**
- * v1 -> v2 is purely additive (positionWindow.placement, groupId on several step
- * types) so existing profiles already satisfy the v2 shape as-is. This just bumps
- * the stored version and establishes the pattern for future, non-trivial migrations.
+ * Migrations here are purely additive:
+ *  - v1 -> v2: positionWindow.placement + groupId on several step types (existing
+ *    profiles already satisfy the shape).
+ *  - v2 -> v3: theme + accentColor settings. Fill any missing fields from
+ *    DEFAULT_SETTINGS so stores written by an older version get sane values.
  */
 function migrateStore(): void {
   const settings = store.get('settings');
   if (settings.schemaVersion >= CURRENT_SCHEMA_VERSION) return;
-  store.set('settings', { ...settings, schemaVersion: CURRENT_SCHEMA_VERSION });
+  store.set('settings', { ...DEFAULT_SETTINGS, ...settings, schemaVersion: CURRENT_SCHEMA_VERSION });
 }
 
 export function listProfiles(): Profile[] {
@@ -82,8 +88,14 @@ export function addStep(profileId: string, step: Step): Profile | undefined {
   return updateProfile(profileId, { steps: [...profile.steps, step] });
 }
 
-export function getSettings(): StoreSchema['settings'] {
+export function getSettings(): Settings {
   return store.get('settings');
+}
+
+export function updateSettings(partial: Partial<UserSettings>): Settings {
+  const next: Settings = { ...getSettings(), ...partial };
+  store.set('settings', next);
+  return next;
 }
 
 export function setOnboardingComplete(complete: boolean): void {

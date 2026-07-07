@@ -1,5 +1,13 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { Profile, Step, PermissionStatus, DisplayInfo, StopResult } from '../shared/types.js';
+import type {
+  Profile,
+  Step,
+  PermissionStatus,
+  DisplayInfo,
+  StopResult,
+  Settings,
+  UserSettings,
+} from '../shared/types.js';
 
 const api = {
   listProfiles: (): Promise<Profile[]> => ipcRenderer.invoke('profiles:list'),
@@ -20,6 +28,9 @@ const api = {
   openPermissionSettings: (kind: 'accessibility' | 'automation'): Promise<void> =>
     ipcRenderer.invoke('permissions:openSettings', kind),
   completeOnboarding: (): Promise<void> => ipcRenderer.invoke('settings:completeOnboarding'),
+  getSettings: (): Promise<Settings> => ipcRenderer.invoke('settings:get'),
+  updateSettings: (partial: Partial<UserSettings>): Promise<Settings> =>
+    ipcRenderer.invoke('settings:update', partial),
   listDisplays: (): Promise<DisplayInfo[]> => ipcRenderer.invoke('displays:list'),
   onDisplaysChanged: (cb: (displays: DisplayInfo[]) => void): (() => void) => {
     const listener = (_event: unknown, displays: DisplayInfo[]) => cb(displays);

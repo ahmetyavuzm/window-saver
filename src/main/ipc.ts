@@ -7,7 +7,7 @@ import { checkPermissions, PERMISSION_SETTINGS_URLS } from './permissions.js';
 import { listDisplays } from './displays.js';
 import * as registry from './engine/registry.js';
 import { terminateTarget } from './engine/terminate.js';
-import type { Step, StopResult } from '../shared/types.js';
+import type { Step, StopResult, UserSettings } from '../shared/types.js';
 
 function onProfilesChanged(): void {
   rebuildTrayMenu();
@@ -66,6 +66,10 @@ export function registerIpcHandlers(): void {
     shell.openExternal(PERMISSION_SETTINGS_URLS[kind]),
   );
   ipcMain.handle('settings:completeOnboarding', () => store.setOnboardingComplete(true));
+  ipcMain.handle('settings:get', () => store.getSettings());
+  ipcMain.handle('settings:update', (_event, partial: Partial<UserSettings>) =>
+    store.updateSettings(partial),
+  );
 
   ipcMain.handle('displays:list', () => listDisplays());
 }
