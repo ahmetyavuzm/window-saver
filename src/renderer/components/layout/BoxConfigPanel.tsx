@@ -45,15 +45,16 @@ export function BoxConfigPanel({
     cwd: initial.cwd ?? '',
     command: initial.command ?? '',
   });
+  const [fullscreen, setFullscreen] = useState<boolean>(initial.fullscreen ?? false);
 
   function handleSave(e: React.FormEvent) {
     e.preventDefault();
     if (kind === 'launchApp') {
-      onSave({ kind, appName: launchApp.appName, autoInsertWait: launchApp.autoInsertWait });
+      onSave({ kind, appName: launchApp.appName, autoInsertWait: launchApp.autoInsertWait, fullscreen });
     } else if (kind === 'openUrl') {
-      onSave({ kind, url: openUrl.url, browser: openUrl.browser });
+      onSave({ kind, url: openUrl.url, browser: openUrl.browser, fullscreen });
     } else {
-      onSave({ kind, cwd: openTerminal.cwd, command: openTerminal.command || undefined });
+      onSave({ kind, cwd: openTerminal.cwd, command: openTerminal.command || undefined, fullscreen });
     }
   }
 
@@ -93,6 +94,10 @@ export function BoxConfigPanel({
             </select>
           </label>
         )}
+        <label className="box-config-fullscreen">
+          <input type="checkbox" checked={fullscreen} onChange={(e) => setFullscreen(e.target.checked)} />
+          Fullscreen (open as full screen)
+        </label>
         <div className="box-config-actions">
           {onDelete && (
             <button type="button" className="box-config-delete" onClick={onDelete}>

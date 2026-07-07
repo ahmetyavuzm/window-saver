@@ -8,9 +8,10 @@ interface Props {
   onCreate: (name: string) => void;
   onDelete: (id: string) => void;
   onOpenSettings: () => void;
+  onSaveWindows: () => void;
 }
 
-export function ProfileList({ profiles, selectedId, onSelect, onCreate, onDelete, onOpenSettings }: Props) {
+export function ProfileList({ profiles, selectedId, onSelect, onCreate, onDelete, onOpenSettings, onSaveWindows }: Props) {
   const [adding, setAdding] = useState(false);
   const [draftName, setDraftName] = useState('');
 
@@ -25,7 +26,16 @@ export function ProfileList({ profiles, selectedId, onSelect, onCreate, onDelete
     <div className="profile-list">
       <div className="profile-list-header">
         <h2>Profiles</h2>
-        <button onClick={() => setAdding(true)}>+ New</button>
+        <div className="profile-list-actions">
+          <button
+            className="secondary"
+            title="Create a profile from the windows currently open on screen"
+            onClick={onSaveWindows}
+          >
+            Save Windows
+          </button>
+          <button onClick={() => setAdding(true)}>+ New</button>
+        </div>
       </div>
       {adding && (
         <input

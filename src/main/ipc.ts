@@ -7,8 +7,9 @@ import { checkPermissions, PERMISSION_SETTINGS_URLS } from './permissions.js';
 import { listDisplays } from './displays.js';
 import * as registry from './engine/registry.js';
 import { terminateTarget } from './engine/terminate.js';
-import { isYabaiAvailable } from './engine/yabai.js';
-import type { Step, StopResult, UserSettings } from '../shared/types.js';
+import { isYabaiAvailable, ensureSpacesOnDisplay } from './engine/yabai.js';
+import { captureWindows, stepsFromCapturedWindows } from './engine/capture.js';
+import type { CapturedWindow, Step, StopResult, UserSettings } from '../shared/types.js';
 
 function onProfilesChanged(): void {
   rebuildTrayMenu();
@@ -75,4 +76,21 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('displays:list', () => listDisplays());
 
   ipcMain.handle('yabai:isAvailable', () => isYabaiAvailable());
+
+  ipcMain.handle(
+    'desktops:ensureOnDisplay',
+    (_event, displayBounds: { x: number; y: number }, target: number) =>
+      ensureSpacesOnDisplay(displayBounds, target),
+  );
+
+  ipcMain.handle('windows:capture', () => captureWindows());
+
+  ipcMain.handle('profiles:createFromWindows', (_event, name: string, windows: CapturedWindow[]) => {
+    const profile = store.createProfile(name);
+    for (const step of stepsFromCapturedWindows(windows)) {
+      store.addStep(profile.id, step);
+    }
+    onProfilesChanged();
+    return store.getProfile(profile.id);
+  });
 }

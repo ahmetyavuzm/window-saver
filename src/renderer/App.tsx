@@ -21,8 +21,9 @@ import { WindowBox } from './components/layout/WindowBox';
 import { BoxConfigPanel } from './components/layout/BoxConfigPanel';
 import { DesktopTabs, type DesktopSelection } from './components/layout/DesktopTabs';
 import { DesktopGrid } from './components/layout/DesktopGrid';
+import { CaptureWindowsModal } from './components/CaptureWindowsModal';
 import { SettingsPanel } from './components/settings/SettingsPanel';
-import type { Step, RunResult, DisplayInfo } from '../shared/types';
+import type { Step, RunResult, DisplayInfo, CapturedWindow } from '../shared/types';
 
 const DEFAULT_NEW_BOX_CONFIG: BoxConfig = { kind: 'launchApp', appName: '', autoInsertWait: true };
 
@@ -40,7 +41,7 @@ interface ConfigTarget {
 }
 
 export function App() {
-  const { profiles, loading, createProfile, deleteProfile, setSteps, updateProfile, runProfile, stopProfile } =
+  const { profiles, loading, refresh: refreshProfiles, createProfile, deleteProfile, setSteps, updateProfile, runProfile, stopProfile } =
     useProfiles();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [runResult, setRunResult] = useState<RunResult | null>(null);
@@ -55,6 +56,8 @@ export function App() {
   const [activeDesktopByDisplay, setActiveDesktopByDisplay] = useState<Record<number, DesktopSelection>>({});
   const [addedDesktopsByDisplay, setAddedDesktopsByDisplay] = useState<Record<number, number>>({});
   const [yabaiAvailable, setYabaiAvailable] = useState<boolean | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [captureOpen, setCaptureOpen] = useState(false);
   const displays = useDisplays();
   const { settings, updateSettings } = useSettings();
   const desktopLayout = settings?.desktopLayout ?? 'grid';
@@ -187,6 +190,7 @@ export function App() {
         parentWidth={display.workArea.width * scale}
         parentHeight={display.workArea.height * scale}
         label={box.label}
+        fullscreen={box.fullscreen}
         onClick={() =>
           setConfigTarget({ groupId: box.groupId, display, config: box.config, desktopIndex: box.desktopIndex })
         }
@@ -233,6 +237,38 @@ export function App() {
     }));
   }
 
+  async function handleCreateRealDesktops(display: DisplayInfo) {
+    const target = maxDesktopFor(display.id);
+    const where = display.isPrimary ? 'Primary' : `Display ${display.id}`;
+    setNotice('Creating desktops…');
+    try {
+      const res = await window.windowSaver.ensureDesktops(
+        { x: display.bounds.x, y: display.bounds.y },
+        target,
+      );
+      if (res.needsScriptingAddition) {
+        setNotice(
+          'Otomatik masaüstü oluşturma için yabai scripting-addition gerekli. Terminal\'de ' +
+            '"sudo yabai --load-sa" çalıştırıp tekrar deneyin (gerekirse kısmi SIP kapatın).',
+        );
+      } else if (res.created > 0) {
+        setNotice(`${res.created} masaüstü oluşturuldu (${where}).`);
+      } else {
+        setNotice(`Bu ekranda zaten yeterli masaüstü var (${where}).`);
+      }
+    } catch (e) {
+      setNotice('Masaüstü oluşturulamadı: ' + (e instanceof Error ? e.message : String(e)));
+    }
+  }
+
+  async function handleCreateProfileFromWindows(name: string, windows: CapturedWindow[]) {
+    const profile = await window.windowSaver.createProfileFromWindows(name, windows);
+    await refreshProfiles();
+    if (profile) setSelectedId(profile.id);
+    setCaptureOpen(false);
+    setNotice(`"${name}" profili ${windows.length} pencereden oluşturuldu.`);
+  }
+
   async function handleRun() {
     if (!selected) return;
     setRunning(true);
@@ -272,6 +308,7 @@ export function App() {
         onCreate={handleCreate}
         onDelete={deleteProfile}
         onOpenSettings={() => setSettingsOpen(true)}
+        onSaveWindows={() => setCaptureOpen(true)}
       />
       <div className="main-pane">
         {selected ? (
@@ -313,6 +350,7 @@ export function App() {
                   onAddDesktop={handleAddDesktop}
                   onDeleteDesktop={handleDeleteDesktop}
                   onAddWindow={handleAddBoxOnDesktop}
+                  onCreateRealDesktops={handleCreateRealDesktops}
                 />
               ) : (
                 <>
@@ -427,6 +465,21 @@ export function App() {
           onUpdate={(partial) => void updateSettings(partial)}
           onClose={() => setSettingsOpen(false)}
         />
+      )}
+      {captureOpen && (
+        <CaptureWindowsModal
+          displays={displays}
+          onCreate={handleCreateProfileFromWindows}
+          onClose={() => setCaptureOpen(false)}
+        />
+      )}
+      {notice && (
+        <div className="app-notice" role="status">
+          <span>{notice}</span>
+          <button onClick={() => setNotice(null)} aria-label="Dismiss">
+            ×
+          </button>
+        </div>
       )}
     </div>
   );

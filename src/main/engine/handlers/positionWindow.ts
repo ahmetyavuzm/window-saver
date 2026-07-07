@@ -5,6 +5,7 @@ import {
   isYabaiAvailable,
   resolveDisplaySpaceIndex,
   moveFocusedWindowToSpace,
+  fullscreenFocusedWindow,
   YABAI_MISSING_MESSAGE,
 } from '../yabai.js';
 import { computeTargetBounds, resolveDisplayForPlacement, boundsFromNormalizedRect } from '../geometry.js';
@@ -166,6 +167,29 @@ async function positionTerminal(step: PositionWindowStep, knownWindowId?: number
     await sleep(300);
   }
 
+  if (step.fullscreen) {
+    // System Events refuses to drive Terminal (-10006), so native fullscreen
+    // goes through yabai on the focused window.
+    if (!(await isYabaiAvailable())) {
+      return { status: 'error', message: `Fullscreen for Terminal needs yabai. ${YABAI_MISSING_MESSAGE}` };
+    }
+    await runAppleScript(`
+      tell application "Terminal"
+        activate
+        try
+          set frontmost of ${winRef} to true
+        end try
+      end tell
+    `);
+    await sleep(200);
+    await fullscreenFocusedWindow();
+    return successMessage(
+      step,
+      [wantsDesktopMove(step) ? `desktop ${step.desktopIndex}` : null],
+      'fullscreen',
+    );
+  }
+
   const { bounds, actionLabel, fallbackReason } = await resolveTargetBounds(
     step,
     async () => (await readTerminalCGBounds(windowId!)) ?? { x: 0, y: 0, width: 0, height: 0 },
@@ -221,6 +245,17 @@ async function setWindowBounds(windowRef: string, bounds: Bounds): Promise<void>
   `);
 }
 
+// Put a window into native (macOS) fullscreen via the accessibility API. This
+// is a different AX attribute from move/resize, so it works for most apps even
+// where precise positioning is finicky.
+async function setNativeFullscreen(windowRef: string): Promise<void> {
+  await runAppleScript(`
+    tell application "System Events"
+      set value of attribute "AXFullScreen" of (${windowRef}) to true
+    end tell
+  `);
+}
+
 async function positionGeneric(step: PositionWindowStep): Promise<StepLog> {
   // "activate" reliably brings the app to the actual OS-level front. System
   // Events' "set frontmost of process to true" can silently fail to stick
@@ -250,6 +285,18 @@ async function positionGeneric(step: PositionWindowStep): Promise<StepLog> {
     }
     await moveFocusedWindowToSpace(globalSpace);
     await sleep(300);
+  }
+
+  if (step.fullscreen) {
+    await setNativeFullscreen(windowRef);
+    return successMessage(
+      step,
+      [
+        step.windowTitle ? `window "${step.windowTitle}"` : null,
+        wantsDesktopMove(step) ? `desktop ${step.desktopIndex}` : null,
+      ],
+      'fullscreen',
+    );
   }
 
   const { bounds, actionLabel, fallbackReason } = await resolveTargetBounds(step, () => getWindowBounds(windowRef));

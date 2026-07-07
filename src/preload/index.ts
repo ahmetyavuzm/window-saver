@@ -7,6 +7,7 @@ import type {
   StopResult,
   Settings,
   UserSettings,
+  CapturedWindow,
 } from '../shared/types.js';
 
 const api = {
@@ -33,6 +34,14 @@ const api = {
     ipcRenderer.invoke('settings:update', partial),
   listDisplays: (): Promise<DisplayInfo[]> => ipcRenderer.invoke('displays:list'),
   isYabaiAvailable: (): Promise<boolean> => ipcRenderer.invoke('yabai:isAvailable'),
+  ensureDesktops: (
+    displayBounds: { x: number; y: number },
+    target: number,
+  ): Promise<{ created: number; needsScriptingAddition: boolean }> =>
+    ipcRenderer.invoke('desktops:ensureOnDisplay', displayBounds, target),
+  captureWindows: (): Promise<CapturedWindow[]> => ipcRenderer.invoke('windows:capture'),
+  createProfileFromWindows: (name: string, windows: CapturedWindow[]): Promise<Profile | undefined> =>
+    ipcRenderer.invoke('profiles:createFromWindows', name, windows),
   onDisplaysChanged: (cb: (displays: DisplayInfo[]) => void): (() => void) => {
     const listener = (_event: unknown, displays: DisplayInfo[]) => cb(displays);
     ipcRenderer.on('displays:changed', listener);

@@ -397,3 +397,68 @@ input:focus, select:focus {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Fullscreen boxes, Save Windows, auto-desktop, notices (new features)
+   --------------------------------------------------------------------------- */
+.box-config-fullscreen {
+  display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted);
+}
+.box-config-fullscreen input { margin: 0; }
+
+.window-box-fullscreen {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+  border-style: dashed;
+}
+.window-box-fs-badge { margin-right: 4px; }
+
+.profile-list-actions { display: flex; align-items: center; gap: 6px; }
+.profile-list-actions .secondary { font-size: 12px; }
+
+.desktop-grid-create-real {
+  margin-left: 8px; font-size: 11px; padding: 1px 8px; border-radius: var(--radius-sm);
+  background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-ring);
+  cursor: pointer;
+}
+.desktop-grid-create-real:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+
+.app-notice {
+  position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+  max-width: 560px; display: flex; align-items: center; gap: 12px; z-index: 1100;
+  background: var(--surface); border: var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow-lg); padding: 10px 12px; font-size: 12px; color: var(--text);
+  animation: panel-pop var(--dur) var(--ease);
+}
+.app-notice button {
+  border: none; background: transparent; color: var(--text-muted); font-size: 16px;
+  line-height: 1; cursor: pointer; padding: 0 4px;
+}
+.app-notice button:hover { color: var(--text); }
+
+/* Capture (Save Windows) modal */
+.capture-modal {
+  background: var(--surface); border-radius: var(--radius); width: 460px; max-width: 92vw;
+  max-height: 80vh; display: flex; flex-direction: column; overflow: hidden;
+  box-shadow: var(--shadow-lg); animation: panel-pop var(--dur) var(--ease);
+}
+.capture-body { padding: 12px 16px; overflow-y: auto; min-height: 80px; }
+.capture-empty, .capture-error { font-size: 12px; color: var(--text-muted); margin: 8px 0; }
+.capture-error { color: var(--danger); }
+.capture-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.capture-item label {
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: var(--radius-sm);
+  cursor: pointer; font-size: 13px;
+}
+.capture-item label:hover { background: var(--surface-2); }
+.capture-app { font-weight: 600; }
+.capture-meta { margin-left: auto; font-size: 11px; color: var(--text-muted); }
+.capture-fs { color: var(--accent); }
+.capture-footer {
+  display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-top: var(--border);
+}
+.capture-footer .new-profile-input { flex: 1; }
+.capture-actions { display: flex; gap: 8px; }
+.capture-actions button:last-child {
+  background: var(--accent); color: var(--accent-fg); border-color: transparent;
+}
+.capture-actions button:last-child:hover:not(:disabled) { background: var(--accent-hover); }

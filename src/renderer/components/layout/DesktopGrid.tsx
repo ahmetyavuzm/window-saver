@@ -16,6 +16,8 @@ interface Props {
   onAddDesktop: (displayId: number) => void;
   onDeleteDesktop: (displayId: number, desktop: number) => void;
   onAddWindow: (display: DisplayInfo, desktop: number) => void;
+  // Best-effort create the real macOS Spaces to match this display's frames.
+  onCreateRealDesktops: (display: DisplayInfo) => void;
 }
 
 // "Grid" layout: one row per physical display, its Desktop 1,2,3… drawn as
@@ -31,6 +33,7 @@ export function DesktopGrid({
   onAddDesktop,
   onDeleteDesktop,
   onAddWindow,
+  onCreateRealDesktops,
 }: Props) {
   if (displays.length === 0) {
     return <div className="layout-canvas empty-state">Detecting displays…</div>;
@@ -47,6 +50,15 @@ export function DesktopGrid({
           <div className="desktop-grid-row" key={display.id}>
             <span className="desktop-grid-screen">
               {display.isPrimary ? 'Primary' : `Display ${display.id}`}
+              {desktopsFor(display.id).length > 1 && (
+                <button
+                  className="desktop-grid-create-real"
+                  title="Create the real macOS desktops (Spaces) for this screen via yabai"
+                  onClick={() => onCreateRealDesktops(display)}
+                >
+                  Create desktops
+                </button>
+              )}
             </span>
             <div className="desktop-grid-frames">
               {desktopsFor(display.id).map((desktop) => (

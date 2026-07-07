@@ -6,6 +6,7 @@ interface WindowBoxProps {
   parentWidth: number;
   parentHeight: number;
   label: string;
+  fullscreen?: boolean;
   onChange: (rect: NormalizedRect) => void;
   onClick?: () => void;
   onDelete?: () => void;
@@ -13,10 +14,10 @@ interface WindowBoxProps {
 
 const MIN_SIZE_PX = 40;
 
-export function WindowBox({ rect, parentWidth, parentHeight, label, onChange, onClick, onDelete }: WindowBoxProps) {
+export function WindowBox({ rect, parentWidth, parentHeight, label, fullscreen, onChange, onClick, onDelete }: WindowBoxProps) {
   return (
     <Rnd
-      className="window-box"
+      className={fullscreen ? 'window-box window-box-fullscreen' : 'window-box'}
       bounds="parent"
       size={{ width: rect.width * parentWidth, height: rect.height * parentHeight }}
       position={{ x: rect.x * parentWidth, y: rect.y * parentHeight }}
@@ -40,7 +41,10 @@ export function WindowBox({ rect, parentWidth, parentHeight, label, onChange, on
       }}
       onClick={onClick}
     >
-      <div className="window-box-label">{label}</div>
+      <div className="window-box-label">
+        {fullscreen && <span className="window-box-fs-badge" title="Fullscreen">⛶</span>}
+        {label}
+      </div>
       {onDelete && (
         <button
           className="window-box-delete"

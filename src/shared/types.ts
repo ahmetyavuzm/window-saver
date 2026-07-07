@@ -34,6 +34,12 @@ export type Step =
        * run time (global indices shift when desktops/displays change).
        */
       desktopIndex?: number;
+      /**
+       * Open the window as native (macOS) fullscreen on its target display
+       * instead of applying `placement.rect`. A fullscreen window occupies the
+       * whole display, so the rect/position is ignored at run time.
+       */
+      fullscreen?: boolean;
       groupId?: string;
     }
   | {
@@ -121,4 +127,18 @@ export interface DisplayInfo {
   bounds: { x: number; y: number; width: number; height: number };
   workArea: { x: number; y: number; width: number; height: number };
   isPrimary: boolean;
+}
+
+/**
+ * A live window captured from the screen (via yabai) that can be turned into a
+ * profile box. `rect` is workArea-relative (same NormalizedRect the builder
+ * uses); `desktopIndex` is the per-display desktop it currently sits on.
+ */
+export interface CapturedWindow {
+  appName: string;
+  title: string;
+  displayId: number; // Electron display id
+  rect: NormalizedRect;
+  desktopIndex?: number; // per-display desktop (undefined/1 = current)
+  fullscreen: boolean;
 }

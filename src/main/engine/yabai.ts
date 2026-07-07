@@ -20,6 +20,45 @@ interface YabaiSpace {
   'is-native-fullscreen': boolean;
 }
 
+export interface YabaiWindow {
+  app: string;
+  title: string;
+  frame: { x: number; y: number; w: number; h: number };
+  display: number; // yabai display index
+  space: number; // global Space index
+  role: string;
+  subrole: string;
+  'is-native-fullscreen': boolean;
+  'is-minimized': boolean;
+  'is-hidden': boolean;
+  'root-window': boolean;
+}
+
+const SCRIPTING_ADDITION_MESSAGE =
+  'Masaüstü (Space) otomatik oluşturmak için yabai\'nin scripting-addition\'ı gerekli. ' +
+  'Terminal\'de "sudo yabai --load-sa" çalıştırın (ve gerekiyorsa kısmi SIP kapatın); ' +
+  'ardından tekrar deneyin. Bu olmadan masaüstlerini Mission Control\'den elle oluşturun.';
+
+// Match a physical display (by frame origin) to its yabai display. Nearest
+// origin wins so a small rounding/arrangement drift still resolves.
+function matchYabaiDisplay(
+  displays: YabaiDisplay[],
+  displayBounds: { x: number; y: number },
+): YabaiDisplay | null {
+  if (displays.length === 0) return null;
+  const targetX = Math.round(displayBounds.x);
+  const targetY = Math.round(displayBounds.y);
+  const exact = displays.find(
+    (d) => Math.round(d.frame.x) === targetX && Math.round(d.frame.y) === targetY,
+  );
+  if (exact) return exact;
+  return displays.reduce((best, d) => {
+    const dist = (d.frame.x - displayBounds.x) ** 2 + (d.frame.y - displayBounds.y) ** 2;
+    const bestDist = (best.frame.x - displayBounds.x) ** 2 + (best.frame.y - displayBounds.y) ** 2;
+    return dist < bestDist ? d : best;
+  }, displays[0]);
+}
+
 async function runYabai(args: string[]): Promise<string> {
   const { stdout } = await execFileAsync('yabai', ['-m', ...args]);
   return stdout.trim();
@@ -42,6 +81,75 @@ export async function queryDisplays(): Promise<YabaiDisplay[]> {
 export async function querySpaces(): Promise<YabaiSpace[]> {
   const stdout = await runYabai(['query', '--spaces']);
   return JSON.parse(stdout) as YabaiSpace[];
+}
+
+export async function queryWindows(): Promise<YabaiWindow[]> {
+  const stdout = await runYabai(['query', '--windows']);
+  return JSON.parse(stdout) as YabaiWindow[];
+}
+
+/**
+ * Create as many real Spaces as needed so the given display has at least
+ * `target` regular (non-fullscreen) desktops. Returns how many were actually
+ * created and whether the scripting-addition is missing (best-effort — the
+ * caller surfaces guidance when `needsScriptingAddition` is true).
+ */
+export async function ensureSpacesOnDisplay(
+  displayBounds: { x: number; y: number },
+  target: number,
+): Promise<{ created: number; needsScriptingAddition: boolean }> {
+  const displays = await queryDisplays();
+  const match = matchYabaiDisplay(displays, displayBounds);
+  if (!match) return { created: 0, needsScriptingAddition: false };
+
+  const current = (await querySpaces()).filter(
+    (s) => s.display === match.index && !s['is-native-fullscreen'],
+  ).length;
+
+  let created = 0;
+  for (let i = current; i < target; i++) {
+    const res = await createSpaceOnDisplay(displayBounds);
+    if (res.needsScriptingAddition) return { created, needsScriptingAddition: true };
+    if (!res.created) break;
+    created++;
+  }
+  return { created, needsScriptingAddition: false };
+}
+
+/**
+ * Best-effort creation of a new macOS Space (desktop) on the given physical
+ * display. Requires yabai's scripting-addition; without it yabai reports a
+ * "scripting-addition" error, which we surface via `needsScriptingAddition` so
+ * the UI can point the user at `sudo yabai --load-sa` instead of failing hard.
+ */
+export async function createSpaceOnDisplay(
+  displayBounds: { x: number; y: number },
+): Promise<{ created: boolean; needsScriptingAddition: boolean }> {
+  const displays = await queryDisplays();
+  const match = matchYabaiDisplay(displays, displayBounds);
+  if (!match) return { created: false, needsScriptingAddition: false };
+
+  // Focus the target display so the new Space lands there.
+  try {
+    await runYabai(['display', '--focus', String(match.index)]);
+  } catch {
+    // Already focused / single display — ignore.
+  }
+
+  // The SA error may arrive as a non-zero exit (throw) or as stderr text on a
+  // zero exit, so inspect both paths.
+  try {
+    const { stdout, stderr } = await execFileAsync('yabai', ['-m', 'space', '--create']);
+    if (/scripting.addition/i.test(`${stdout}${stderr}`)) {
+      return { created: false, needsScriptingAddition: true };
+    }
+    return { created: true, needsScriptingAddition: false };
+  } catch (error) {
+    const err = error as { stderr?: string; message?: string };
+    const text = err.stderr ?? err.message ?? String(error);
+    if (/scripting.addition/i.test(text)) return { created: false, needsScriptingAddition: true };
+    throw error;
+  }
 }
 
 /**
@@ -67,20 +175,8 @@ export async function resolveDisplaySpaceIndex(
   localDesktop: number,
 ): Promise<number | null> {
   const [displays, spaces] = await Promise.all([queryDisplays(), querySpaces()]);
-  if (displays.length === 0) return null;
-
-  const targetX = Math.round(displayBounds.x);
-  const targetY = Math.round(displayBounds.y);
-  const exact = displays.find(
-    (d) => Math.round(d.frame.x) === targetX && Math.round(d.frame.y) === targetY,
-  );
-  const match =
-    exact ??
-    displays.reduce((best, d) => {
-      const dist = (d.frame.x - displayBounds.x) ** 2 + (d.frame.y - displayBounds.y) ** 2;
-      const bestDist = (best.frame.x - displayBounds.x) ** 2 + (best.frame.y - displayBounds.y) ** 2;
-      return dist < bestDist ? d : best;
-    }, displays[0]);
+  const match = matchYabaiDisplay(displays, displayBounds);
+  if (!match) return null;
 
   // Regular (non-fullscreen) desktops on the matched display, in order. Fall
   // back to the display's raw `spaces` if the spaces query came back empty.
@@ -99,6 +195,18 @@ function isBenignYabaiNoop(error: unknown): boolean {
   return /already focused|already on this space/i.test(message);
 }
 
+// Put the currently focused window into native fullscreen. yabai only exposes a
+// *toggle*, so query first and no-op if it is already fullscreen (avoids turning
+// an already-fullscreen window back to windowed). Used for apps (e.g. Terminal)
+// that reject the System Events AXFullScreen path.
+export async function fullscreenFocusedWindow(): Promise<void> {
+  const stdout = await runYabai(['query', '--windows', '--window']);
+  const win = JSON.parse(stdout) as { 'is-native-fullscreen'?: boolean };
+  if (!win['is-native-fullscreen']) {
+    await runYabai(['window', '--toggle', 'native-fullscreen']);
+  }
+}
+
 export async function moveFocusedWindowToSpace(spaceIndex: number): Promise<void> {
   try {
     await runYabai(['window', '--space', String(spaceIndex)]);
@@ -112,4 +220,4 @@ export async function moveFocusedWindowToSpace(spaceIndex: number): Promise<void
   }
 }
 
-export { YABAI_MISSING_MESSAGE };
+export { YABAI_MISSING_MESSAGE, SCRIPTING_ADDITION_MESSAGE };

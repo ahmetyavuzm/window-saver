@@ -12,6 +12,7 @@ export interface BoxConfig {
   browser?: Browser;
   cwd?: string;
   command?: string;
+  fullscreen?: boolean; // open the window as native fullscreen (ignores rect)
 }
 
 export interface LayoutBox {
@@ -21,6 +22,21 @@ export interface LayoutBox {
   label: string;
   config: BoxConfig;
   desktopIndex?: number; // desktop within this box's display; undefined/1 = current desktop
+  fullscreen?: boolean;
+}
+
+// A box is "fullscreen" when its rect fills the whole display workArea. Used
+// both to drive the canvas badge and to auto-mark a box fullscreen when the
+// user drags/resizes it to cover the entire frame.
+const FULLSCREEN_RECT: NormalizedRect = { x: 0, y: 0, width: 1, height: 1 };
+export function isFullscreenRect(rect: NormalizedRect): boolean {
+  const eps = 0.02;
+  return (
+    Math.abs(rect.x) < eps &&
+    Math.abs(rect.y) < eps &&
+    Math.abs(rect.width - 1) < eps &&
+    Math.abs(rect.height - 1) < eps
+  );
 }
 
 function labelFor(config: BoxConfig): string {
@@ -110,6 +126,7 @@ export function deriveBoxes(steps: Step[]): LayoutBox[] {
     const launchStep = groupSteps.find((s) => s.type === 'launchApp' || s.type === 'openUrl' || s.type === 'openTerminal');
     const config = launchStep ? configFromStep(launchStep) : undefined;
     const finalConfig: BoxConfig = config ?? { kind: 'launchApp', appName: posStep.appName, autoInsertWait: true };
+    finalConfig.fullscreen = posStep.fullscreen ?? false;
     boxes.push({
       groupId,
       displayId: posStep.placement.display.displayId,
@@ -117,6 +134,7 @@ export function deriveBoxes(steps: Step[]): LayoutBox[] {
       label: labelFor(finalConfig),
       config: finalConfig,
       desktopIndex: posStep.desktopIndex,
+      fullscreen: posStep.fullscreen ?? false,
     });
   }
   return boxes;
@@ -148,9 +166,10 @@ export function createBoxSteps(
     appName: appNameForConfig(config),
     placement: {
       display: { displayId: display.id, widthPx: display.bounds.width, heightPx: display.bounds.height },
-      rect: DEFAULT_BOX_RECT,
+      rect: config.fullscreen ? FULLSCREEN_RECT : DEFAULT_BOX_RECT,
     },
     ...(desktopIndex !== undefined ? { desktopIndex } : {}),
+    ...(config.fullscreen ? { fullscreen: true } : {}),
     groupId,
   };
   return [...steps, ...built, positionStep];
@@ -169,6 +188,17 @@ export function updateBoxConfig(steps: Step[], groupId: string, config: BoxConfi
 
   const built = buildKindSteps(groupId, config);
   const updatedPosition: Step = { ...positionStep, appName: appNameForConfig(config) };
+  // Fullscreen is stored on the position step and forces a full-display rect.
+  // Turning it off restores an editable rect if the box was still full-screen.
+  if (config.fullscreen) {
+    updatedPosition.fullscreen = true;
+    updatedPosition.placement = { ...positionStep.placement, rect: FULLSCREEN_RECT };
+  } else {
+    delete updatedPosition.fullscreen;
+    if (isFullscreenRect(positionStep.placement.rect)) {
+      updatedPosition.placement = { ...positionStep.placement, rect: DEFAULT_BOX_RECT };
+    }
+  }
 
   return [...before, ...built, updatedPosition, ...after];
 }
@@ -190,10 +220,15 @@ export function updateBoxDisplay(steps: Step[], groupId: string, display: Displa
   });
 }
 
+// Update the box's placement rect (canvas drag/resize). Dragging a box to cover
+// the whole frame auto-marks it fullscreen; shrinking it back clears the flag.
 export function updateBoxRect(steps: Step[], groupId: string, rect: NormalizedRect): Step[] {
   return steps.map((step) => {
     if (step.type !== 'positionWindow' || step.groupId !== groupId || !step.placement) return step;
-    return { ...step, placement: { ...step.placement, rect } };
+    const next: Step = { ...step, placement: { ...step.placement, rect } };
+    if (isFullscreenRect(rect)) next.fullscreen = true;
+    else delete next.fullscreen;
+    return next;
   });
 }
 

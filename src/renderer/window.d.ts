@@ -7,6 +7,7 @@ import type {
   StopResult,
   Settings,
   UserSettings,
+  CapturedWindow,
 } from '../shared/types';
 
 export interface WindowSaverApi {
@@ -30,6 +31,12 @@ export interface WindowSaverApi {
   listDisplays(): Promise<DisplayInfo[]>;
   isYabaiAvailable(): Promise<boolean>;
   onDisplaysChanged(cb: (displays: DisplayInfo[]) => void): () => void;
+  ensureDesktops(
+    displayBounds: { x: number; y: number },
+    target: number,
+  ): Promise<{ created: number; needsScriptingAddition: boolean }>;
+  captureWindows(): Promise<CapturedWindow[]>;
+  createProfileFromWindows(name: string, windows: CapturedWindow[]): Promise<Profile | undefined>;
 }
 
 declare global {
