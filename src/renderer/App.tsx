@@ -7,7 +7,7 @@ import {
   createBoxSteps,
   updateBoxConfig,
   updateBoxRect,
-  updateBoxSpace,
+  updateBoxDesktop,
   deleteBox,
   type BoxConfig,
 } from './hooks/useLayoutBoxes';
@@ -23,18 +23,19 @@ import type { Step, RunResult, DisplayInfo } from '../shared/types';
 
 const DEFAULT_NEW_BOX_CONFIG: BoxConfig = { kind: 'launchApp', appName: '', autoInsertWait: true };
 
-// Desktop 1 is the default (no yabai Space move → undefined); Desktop N>1 maps
-// to yabai Space N. "All" creates boxes on the default desktop.
-function desktopToSpaceIndex(d: DesktopSelection): number | undefined {
+// Desktops are per-display: each screen has its own Desktop 1,2,3…. Desktop 1
+// (and "All") is the default with no yabai Space move → stored desktopIndex
+// undefined; Desktop N>1 stores N and is resolved to a global Space at run time.
+function activeToStored(d: DesktopSelection): number | undefined {
   return d === 'all' || d === 1 ? undefined : d;
 }
-const boxDesktop = (spaceIndex?: number): number => spaceIndex ?? 1;
+const boxDesktop = (desktopIndex?: number): number => desktopIndex ?? 1;
 
 interface ConfigTarget {
   groupId: string | null; // null = creating a new box
   display: DisplayInfo;
   config: BoxConfig;
-  spaceIndex?: number; // current desktop of an existing box
+  desktopIndex?: number; // current desktop of an existing box (within its display)
 }
 
 export function App() {
@@ -48,8 +49,10 @@ export function App() {
   const [newBoxDisplayId, setNewBoxDisplayId] = useState<number | null>(null);
   const [configTarget, setConfigTarget] = useState<ConfigTarget | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [activeDesktop, setActiveDesktop] = useState<DesktopSelection>(1);
-  const [addedDesktops, setAddedDesktops] = useState(1); // highest empty desktop the user added
+  // Active desktop tab and highest user-added empty desktop, both keyed by
+  // display id (missing key ⇒ Desktop 1).
+  const [activeDesktopByDisplay, setActiveDesktopByDisplay] = useState<Record<number, DesktopSelection>>({});
+  const [addedDesktopsByDisplay, setAddedDesktopsByDisplay] = useState<Record<number, number>>({});
   const [yabaiAvailable, setYabaiAvailable] = useState<boolean | null>(null);
   const displays = useDisplays();
   const { settings, updateSettings } = useSettings();
@@ -71,27 +74,41 @@ export function App() {
     // linger for a profile that was never run in this session.
     setHasTrackedTargets(false);
     // Desktop view is per-profile; reset it when switching.
-    setActiveDesktop(1);
-    setAddedDesktops(1);
+    setActiveDesktopByDisplay({});
+    setAddedDesktopsByDisplay({});
   }, [selectedId]);
 
   const selected = profiles.find((p) => p.id === selectedId) ?? null;
   const layoutBoxes = useLayoutBoxes(selected?.steps ?? []);
 
-  // Desktops shown as tabs: 1..max(used by boxes, user-added empty tabs).
-  const maxDesktop = Math.max(
-    addedDesktops,
-    ...layoutBoxes.map((b) => boxDesktop(b.spaceIndex)),
-    typeof activeDesktop === 'number' ? activeDesktop : 1,
-  );
-  const desktops = Array.from({ length: maxDesktop }, (_, i) => i + 1);
-  const visibleBoxes =
-    activeDesktop === 'all'
-      ? layoutBoxes
-      : layoutBoxes.filter((b) => boxDesktop(b.spaceIndex) === activeDesktop);
+  const activeDesktopFor = (id: number): DesktopSelection => activeDesktopByDisplay[id] ?? 1;
+  const boxesOnDisplay = (id: number) => layoutBoxes.filter((b) => b.displayId === id);
+  // Desktop tabs for a display: 1..max(boxes' desktop, user-added, active tab).
+  const maxDesktopFor = (id: number): number => {
+    const active = activeDesktopByDisplay[id];
+    return Math.max(
+      addedDesktopsByDisplay[id] ?? 1,
+      ...boxesOnDisplay(id).map((b) => boxDesktop(b.desktopIndex)),
+      typeof active === 'number' ? active : 1,
+    );
+  };
+  const desktopsFor = (id: number): number[] => Array.from({ length: maxDesktopFor(id) }, (_, i) => i + 1);
+  // Only the top desktop may be removed, and only when it holds no boxes.
+  const deletableDesktopFor = (id: number): number | undefined => {
+    const top = maxDesktopFor(id);
+    if (top <= 1) return undefined;
+    const occupied = boxesOnDisplay(id).some((b) => boxDesktop(b.desktopIndex) === top);
+    return occupied ? undefined : top;
+  };
+  const boxVisibleOnDisplay = (box: { displayId: number; desktopIndex?: number }): boolean => {
+    const active = activeDesktopFor(box.displayId);
+    return active === 'all' || boxDesktop(box.desktopIndex) === active;
+  };
 
   // Multi-desktop needs yabai; warn only when the profile actually uses it.
-  const usesMultiDesktop = maxDesktop > 1 || layoutBoxes.some((b) => boxDesktop(b.spaceIndex) > 1);
+  const usesMultiDesktop =
+    layoutBoxes.some((b) => boxDesktop(b.desktopIndex) > 1) ||
+    Object.values(addedDesktopsByDisplay).some((n) => n > 1);
   const showYabaiWarning = yabaiAvailable === false && usesMultiDesktop;
 
   useEffect(() => {
@@ -135,19 +152,33 @@ export function App() {
   function handleSaveConfig(config: BoxConfig) {
     if (!selected || !configTarget) return;
     if (configTarget.groupId === null) {
-      // New boxes inherit the desktop whose tab is active.
-      const spaceIndex = desktopToSpaceIndex(activeDesktop);
-      handleStepsChange(createBoxSteps(selected.steps, configTarget.display, config, spaceIndex));
+      // New boxes inherit the active desktop of the display they're placed on.
+      const desktopIndex = activeToStored(activeDesktopFor(configTarget.display.id));
+      handleStepsChange(createBoxSteps(selected.steps, configTarget.display, config, desktopIndex));
     } else {
       handleStepsChange(updateBoxConfig(selected.steps, configTarget.groupId, config));
     }
     setConfigTarget(null);
   }
 
-  function handleAddDesktop() {
-    const next = maxDesktop + 1;
-    setAddedDesktops(next);
-    setActiveDesktop(next);
+  function setActiveDesktop(displayId: number, sel: DesktopSelection) {
+    setActiveDesktopByDisplay((prev) => ({ ...prev, [displayId]: sel }));
+  }
+
+  function handleAddDesktop(displayId: number) {
+    const next = maxDesktopFor(displayId) + 1;
+    setAddedDesktopsByDisplay((prev) => ({ ...prev, [displayId]: next }));
+    setActiveDesktopByDisplay((prev) => ({ ...prev, [displayId]: next }));
+  }
+
+  function handleDeleteDesktop(displayId: number, d: number) {
+    if (deletableDesktopFor(displayId) !== d) return; // guard: only top & empty
+    const fallback = d - 1;
+    setAddedDesktopsByDisplay((prev) => ({ ...prev, [displayId]: fallback }));
+    setActiveDesktopByDisplay((prev) => ({
+      ...prev,
+      [displayId]: prev[displayId] === d ? fallback : prev[displayId] ?? 1,
+    }));
   }
 
   async function handleRun() {
@@ -212,12 +243,25 @@ export function App() {
             </div>
             <div className="layout-canvas-wrap">
               <h2>Screens</h2>
-              <DesktopTabs
-                desktops={desktops}
-                active={activeDesktop}
-                onSelect={setActiveDesktop}
-                onAdd={handleAddDesktop}
-              />
+              {displays.length > 0 && (
+                <div className="desktop-tabs-panel">
+                  {displays.map((d) => (
+                    <div className="desktop-tabs-row" key={d.id}>
+                      <span className="desktop-tabs-screen">
+                        {d.isPrimary ? 'Primary' : `Display ${d.id}`}
+                      </span>
+                      <DesktopTabs
+                        desktops={desktopsFor(d.id)}
+                        active={activeDesktopFor(d.id)}
+                        deletableDesktop={deletableDesktopFor(d.id)}
+                        onSelect={(sel) => setActiveDesktop(d.id, sel)}
+                        onAdd={() => handleAddDesktop(d.id)}
+                        onDelete={(dd) => handleDeleteDesktop(d.id, dd)}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
               {showYabaiWarning && (
                 <div className="yabai-banner" role="alert">
                   Multi-desktop placement needs <strong>yabai</strong>. Install it and grant Accessibility,
@@ -243,8 +287,8 @@ export function App() {
                 displays={displays}
                 renderBoxes={(display, scale) => (
                   <>
-                    {visibleBoxes
-                      .filter((box) => box.displayId === display.id)
+                    {boxesOnDisplay(display.id)
+                      .filter((box) => boxVisibleOnDisplay(box))
                       .map((box) => (
                         <WindowBox
                           key={box.groupId}
@@ -257,7 +301,7 @@ export function App() {
                               groupId: box.groupId,
                               display,
                               config: box.config,
-                              spaceIndex: box.spaceIndex,
+                              desktopIndex: box.desktopIndex,
                             })
                           }
                           onChange={(next) => {
@@ -288,14 +332,16 @@ export function App() {
                       }
                     : undefined
                 }
-                desktops={configTarget.groupId ? desktops : undefined}
-                desktop={configTarget.groupId ? boxDesktop(configTarget.spaceIndex) : undefined}
+                desktops={configTarget.groupId ? desktopsFor(configTarget.display.id) : undefined}
+                desktop={configTarget.groupId ? boxDesktop(configTarget.desktopIndex) : undefined}
                 onDesktopChange={
                   configTarget.groupId
                     ? (d) => {
                         if (!selected || !configTarget.groupId) return;
-                        handleStepsChange(updateBoxSpace(selected.steps, configTarget.groupId, d === 1 ? undefined : d));
-                        setConfigTarget((prev) => (prev ? { ...prev, spaceIndex: d === 1 ? undefined : d } : prev));
+                        handleStepsChange(
+                          updateBoxDesktop(selected.steps, configTarget.groupId, d === 1 ? undefined : d),
+                        );
+                        setConfigTarget((prev) => (prev ? { ...prev, desktopIndex: d === 1 ? undefined : d } : prev));
                       }
                     : undefined
                 }

@@ -184,7 +184,14 @@ input:focus, select:focus {
 --------------------------------------------------------------------------- */
 .layout-canvas-wrap { margin-bottom: 24px; }
 .layout-canvas-wrap h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); margin: 0 0 8px; }
-.desktop-tabs { display: flex; gap: 4px; margin-bottom: 10px; align-items: center; flex-wrap: wrap; }
+.desktop-tabs-panel { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+.desktop-tabs-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.desktop-tabs-screen {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted);
+  min-width: 74px; flex-shrink: 0;
+}
+.desktop-tabs { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.desktop-tab-wrap { position: relative; display: inline-flex; align-items: center; }
 .desktop-tab {
   padding: 5px 12px; font-size: 12px; background: transparent; border: 1px solid transparent;
   color: var(--text-muted); border-radius: var(--radius-sm);
@@ -192,6 +199,11 @@ input:focus, select:focus {
 .desktop-tab:hover { background: var(--surface-2); color: var(--text); }
 .desktop-tab.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-ring); font-weight: 500; }
 .desktop-tab-add { color: var(--text-muted); font-size: 15px; line-height: 1; padding: 4px 10px; }
+.desktop-tab-delete {
+  margin-left: 2px; width: 18px; height: 18px; padding: 0; line-height: 1; font-size: 13px;
+  color: var(--text-muted); background: transparent; border: none; border-radius: 50%;
+}
+.desktop-tab-delete:hover { background: color-mix(in srgb, var(--danger) 18%, transparent); color: var(--danger); }
 
 .yabai-banner {
   background: color-mix(in srgb, var(--danger) 12%, transparent);
