@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useProfiles } from './hooks/useProfiles';
 import { useDisplays } from './hooks/useDisplays';
+import { useSettings } from './hooks/useSettings';
 import {
   useLayoutBoxes,
   createBoxSteps,
@@ -36,6 +37,7 @@ export function App() {
   const [newBoxDisplayId, setNewBoxDisplayId] = useState<number | null>(null);
   const [configTarget, setConfigTarget] = useState<ConfigTarget | null>(null);
   const displays = useDisplays();
+  const { settings, updateSettings } = useSettings();
 
   useEffect(() => {
     if (!selectedId && profiles.length > 0) setSelectedId(profiles[0].id);

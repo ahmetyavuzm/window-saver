@@ -1,4 +1,13 @@
-import type { Profile, Step, RunResult, PermissionStatus, DisplayInfo, StopResult } from '../shared/types';
+import type {
+  Profile,
+  Step,
+  RunResult,
+  PermissionStatus,
+  DisplayInfo,
+  StopResult,
+  Settings,
+  UserSettings,
+} from '../shared/types';
 
 export interface WindowSaverApi {
   listProfiles(): Promise<Profile[]>;
@@ -16,6 +25,8 @@ export interface WindowSaverApi {
   checkPermissions(): Promise<PermissionStatus>;
   openPermissionSettings(kind: 'accessibility' | 'automation'): Promise<void>;
   completeOnboarding(): Promise<void>;
+  getSettings(): Promise<Settings>;
+  updateSettings(partial: Partial<UserSettings>): Promise<Settings>;
   listDisplays(): Promise<DisplayInfo[]>;
   onDisplaysChanged(cb: (displays: DisplayInfo[]) => void): () => void;
 }
