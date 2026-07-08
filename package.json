@@ -1,6 +1,6 @@
 {
   "name": "window-saver",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Menu-bar workspace launcher: save a set of apps/windows/urls/terminals as a Profile, replay it with one click or hotkey.",
   "private": true,
   "type": "module",
