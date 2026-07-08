@@ -9,7 +9,10 @@ export function reregisterHotkeys(): void {
     if (!profile.hotkey) continue;
 
     const ok = globalShortcut.register(profile.hotkey, () => {
-      void runProfile(profile);
+      // Look the profile up fresh at fire time — the captured one goes stale
+      // if its steps are edited after registration.
+      const fresh = store.getProfile(profile.id);
+      if (fresh) void runProfile(fresh);
     });
 
     if (!ok) {

@@ -38,7 +38,6 @@ export type Step =
       id: string;
       appName: string;
       bundleId?: string;
-      args?: string[];
       /**
        * Force a new instance/window even if the app is already running
        * (`open -n`). Default false: `open` just brings the running app forward,
@@ -52,6 +51,12 @@ export type Step =
       type: 'positionWindow';
       id: string;
       appName: string;
+      /**
+       * Legacy fields from the removed raw-step editor: `rectangleAction` is a
+       * Rectangle-style preset used only when `placement` is absent, and
+       * `windowTitle` narrows multi-window apps. Nothing creates them anymore,
+       * but the engine still honors them for profiles saved by older versions.
+       */
       rectangleAction?: string;
       placement?: WindowPlacement;
       windowTitle?: string;
@@ -89,8 +94,9 @@ export type Step =
       groupId?: string;
     }
   | { type: 'openTerminal'; id: string; app: 'Terminal'; cwd: string; command?: string; groupId?: string }
-  | { type: 'wait'; id: string; ms: number }
-  | { type: 'customAppleScript'; id: string; script: string };
+  // No UI creates bare wait steps anymore (box actions have their own wait);
+  // kept so profiles saved by older versions still run.
+  | { type: 'wait'; id: string; ms: number };
 
 export interface Profile {
   id: string;

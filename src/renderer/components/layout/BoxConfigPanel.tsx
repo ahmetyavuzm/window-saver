@@ -61,7 +61,10 @@ export function BoxConfigPanel({
     kind === 'launchApp' ? launchApp.appName : kind === 'openUrl' ? (openUrl.browser !== 'default' ? openUrl.browser : 'Safari') : 'Terminal';
   const templates = [...catalogActionsFor(currentAppName), ...GENERIC_ACTIONS];
   const [templateLabel, setTemplateLabel] = useState<string>(templates[0]?.label ?? '');
-  const selectedTemplate = templates.find((t) => t.label === templateLabel);
+  // The catalog changes when the user edits the app name/kind while the panel
+  // is open; fall back to the first entry so the picker never points at a
+  // template that no longer exists.
+  const selectedTemplate = templates.find((t) => t.label === templateLabel) ?? templates[0];
   const [pendingValue, setPendingValue] = useState('');
   const [pendingMs, setPendingMs] = useState(1000);
 
@@ -201,7 +204,7 @@ export function BoxConfigPanel({
           )}
           <div className="box-actions-add">
             <select
-              value={templateLabel}
+              value={selectedTemplate?.label ?? ''}
               onChange={(e) => {
                 setTemplateLabel(e.target.value);
                 setPendingValue('');

@@ -7,8 +7,11 @@ import { handleOpenTerminal } from './handlers/openTerminal.js';
 import { handleWait } from './handlers/wait.js';
 import { runBoxAction } from './handlers/runAction.js';
 import { createDesktopViaMissionControl } from './missioncontrol.js';
+import { resolveDisplayForPlacement } from './geometry.js';
 import * as registry from './registry.js';
+import { getSettings } from '../store.js';
 import type { StepResult } from './types.js';
+import { screen } from 'electron';
 
 type Handler = (step: never) => Promise<StepResult>;
 
@@ -20,8 +23,8 @@ const handlers: Partial<Record<Step['type'], Handler>> = {
   wait: handleWait as Handler,
 };
 
-// launchApp/waitForWindow have nothing to run for if they fail; other step
-// types default to letting the rest of the profile continue.
+// When launchApp/waitForWindow fail, the rest of THEIR group has no window to
+// act on and is skipped; other step types never doom their group.
 const ABORT_ON_FAILURE: Set<Step['type']> = new Set(['launchApp', 'waitForWindow']);
 
 // Does this profile open at least one *windowed* (non native-fullscreen) window?
@@ -50,11 +53,21 @@ function hasWindowedTarget(profile: Profile): boolean {
   return false;
 }
 
-export async function runProfile(
-  profile: Profile,
-  options?: { createNewDesktop?: boolean },
-  onLog?: (entry: LogEntry) => void,
-): Promise<RunResult> {
+// Where the 'createNew' desktop must land: the display the profile's first
+// placed window targets (so windows open ON the fresh desktop, not beside it on
+// another display). Falls back to the primary display.
+function desktopTargetOrigin(profile: Profile): { x: number; y: number } {
+  for (const s of profile.steps) {
+    if (s.type === 'positionWindow' && s.placement) {
+      const d = resolveDisplayForPlacement(s.placement.display).display;
+      return { x: d.bounds.x, y: d.bounds.y };
+    }
+  }
+  const p = screen.getPrimaryDisplay();
+  return { x: p.bounds.x, y: p.bounds.y };
+}
+
+export async function runProfile(profile: Profile): Promise<RunResult> {
   const log: LogEntry[] = [];
   let ok = true;
 
@@ -64,16 +77,16 @@ export async function runProfile(
 
   const emit = (entry: LogEntry) => {
     log.push(entry);
-    onLog?.(entry);
   };
 
   // desktopMode 'createNew': add a fresh desktop (Mission Control "+") before
-  // anything launches, so the workspace gets a clean slate. Best-effort and
-  // SIP-free; failure is logged but never aborts the run. Skipped when every
-  // window is fullscreen (each already gets its own Space — a new desktop would
-  // just be an empty orphan on some display).
-  if (options?.createNewDesktop && hasWindowedTarget(profile)) {
-    const res = await createDesktopViaMissionControl();
+  // anything launches, so the workspace gets a clean slate. Resolved here so
+  // every entry point (editor, tray menu, hotkey) honors the setting equally.
+  // Best-effort and SIP-free; failure is logged but never aborts the run.
+  // Skipped when every window is fullscreen (each already gets its own Space —
+  // a new desktop would just be an empty orphan on some display).
+  if (getSettings().desktopMode === 'createNew' && hasWindowedTarget(profile)) {
+    const res = await createDesktopViaMissionControl(desktopTargetOrigin(profile));
     emit({
       stepId: 'desktop',
       status: res.created ? 'ok' : 'error',
@@ -90,7 +103,23 @@ export async function runProfile(
   // "window 1" (which is only frontmost-at-call-time and can be a stale window).
   const windowIdByGroup = new Map<string, number>();
 
+  // A failed launch/wait only dooms ITS box — remaining steps of that group
+  // are skipped so they don't act on some unrelated window, but every other
+  // box in the profile still runs (one bad app must not cancel the workspace).
+  const failedGroups = new Set<string>();
+
   for (const step of profile.steps) {
+    const stepGroup = 'groupId' in step ? step.groupId : undefined;
+    if (stepGroup && failedGroups.has(stepGroup)) {
+      emit({
+        stepId: step.id,
+        status: 'error',
+        message: `Skipped ${step.type}: an earlier step of this window failed`,
+        timestamp: new Date().toISOString(),
+      });
+      continue;
+    }
+
     if (step.type === 'positionWindow') {
       const knownWindowId = step.groupId ? windowIdByGroup.get(step.groupId) : undefined;
       emit({ stepId: step.id, status: 'running', message: `Running ${step.type}`, timestamp: new Date().toISOString() });
@@ -124,12 +153,11 @@ export async function runProfile(
     emit({ stepId: step.id, status: 'running', message: `Running ${step.type}`, timestamp: new Date().toISOString() });
 
     const result = await handler(step as never);
-    const groupId = 'groupId' in step ? step.groupId : undefined;
     if (result.meta?.target) {
       registry.track(profile.id, result.meta.target);
     }
-    if (result.meta?.windowIdHint !== undefined && groupId) {
-      windowIdByGroup.set(groupId, result.meta.windowIdHint);
+    if (result.meta?.windowIdHint !== undefined && stepGroup) {
+      windowIdByGroup.set(stepGroup, result.meta.windowIdHint);
     }
     const { meta: _meta, ...logFields } = result;
     const entry: LogEntry = { stepId: step.id, timestamp: new Date().toISOString(), ...logFields };
@@ -137,8 +165,8 @@ export async function runProfile(
 
     if (result.status === 'error') {
       ok = false;
-      if (ABORT_ON_FAILURE.has(step.type)) {
-        break;
+      if (stepGroup && ABORT_ON_FAILURE.has(step.type)) {
+        failedGroups.add(stepGroup);
       }
     }
   }

@@ -1,23 +1,23 @@
 import { screen } from 'electron';
 import type { Step, LogEntry } from '../../../shared/types.js';
-import { runAppleScript, runJXA, resolveProcessRef, toAppleScriptString } from '../applescript.js';
+import { runAppleScript, runJXA, resolveProcessRef, resolveAppPid, toAppleScriptString, sleep } from '../applescript.js';
 import {
   isYabaiAvailable,
   resolveDisplaySpaceIndex,
-  moveFocusedWindowToSpace,
-  fullscreenFocusedWindow,
+  moveWindowToSpace,
+  fullscreenWindowById,
+  queryStandardWindowsByPid,
+  queryWindowById,
+  setWindowFrame,
   ensureSpacesOnDisplay,
   YABAI_MISSING_MESSAGE,
+  type YabaiWindow,
 } from '../yabai.js';
 import { computeTargetBounds, resolveDisplayForPlacement, boundsFromNormalizedRect } from '../geometry.js';
 
 type PositionWindowStep = Extract<Step, { type: 'positionWindow' }>;
 type Bounds = { x: number; y: number; width: number; height: number };
 type StepLog = Omit<LogEntry, 'stepId' | 'timestamp'>;
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 // A 'maximize' fullscreen box stays a normal, draggable window (it just fills
 // the workArea), so it behaves like any placed window. Only *native* fullscreen
@@ -183,48 +183,32 @@ async function positionTerminal(step: PositionWindowStep, knownWindowId?: number
   if (windowId === undefined) {
     windowId = parseInt(await runAppleScript(`tell application "Terminal" to return id of front window`), 10);
   }
+  if (Number.isNaN(windowId)) {
+    return { status: 'error', message: 'Terminal has no window to position' };
+  }
   const winRef = `window id ${windowId}`;
 
   if (wantsDesktopMove(step)) {
     if (!(await isYabaiAvailable())) {
       return { status: 'error', message: YABAI_MISSING_MESSAGE };
     }
-    // Resolve/create the target desktop first — creation changes display focus,
-    // so bring our window to front only afterwards, right before the move.
     const resolved = await resolveOrCreateDesktop(step);
     if ('error' in resolved) {
       return { status: 'error', message: resolved.error };
     }
-    // yabai moves the *focused* window, so bring exactly our window to front.
-    await runAppleScript(`
-      tell application "Terminal"
-        activate
-        try
-          set frontmost of ${winRef} to true
-        end try
-      end tell
-    `);
-    await sleep(200);
-    await moveFocusedWindowToSpace(resolved.space);
+    // Terminal's AppleScript window id IS the CGWindowNumber yabai addresses,
+    // so the window can be moved directly — no focus dance needed.
+    await moveWindowToSpace(windowId, resolved.space);
     await sleep(300);
   }
 
   if (isNativeFullscreen(step)) {
     // System Events refuses to drive Terminal (-10006), so native fullscreen
-    // goes through yabai on the focused window.
+    // goes through yabai.
     if (!(await isYabaiAvailable())) {
       return { status: 'error', message: `Fullscreen for Terminal needs yabai. ${YABAI_MISSING_MESSAGE}` };
     }
-    await runAppleScript(`
-      tell application "Terminal"
-        activate
-        try
-          set frontmost of ${winRef} to true
-        end try
-      end tell
-    `);
-    await sleep(200);
-    await fullscreenFocusedWindow();
+    await fullscreenWindowById(windowId);
     return successMessage(
       step,
       [wantsDesktopMove(step) ? `desktop ${step.desktopIndex}` : null],
@@ -244,6 +228,24 @@ async function positionTerminal(step: PositionWindowStep, knownWindowId?: number
   const offsetY = await terminalPositionOffsetY(windowId!);
   await runAppleScript(`tell application "Terminal" to set position of ${winRef} to {${bounds.x}, ${bounds.y - offsetY}}`);
 
+  // Verify against the real on-screen frame (Terminal rounds to character
+  // cells, hence the tolerance). Retry once with a freshly computed offset —
+  // the first set may have moved the window to another display, changing it.
+  const check = await readTerminalCGBounds(windowId!);
+  if (check && !(Math.abs(check.x - bounds.x) <= 40 && Math.abs(check.y - bounds.y) <= 40)) {
+    const offsetY2 = await terminalPositionOffsetY(windowId!);
+    await runAppleScript(`tell application "Terminal" to set position of ${winRef} to {${bounds.x}, ${bounds.y - offsetY2}}`);
+    const recheck = await readTerminalCGBounds(windowId!);
+    if (recheck && !(Math.abs(recheck.x - bounds.x) <= 40 && Math.abs(recheck.y - bounds.y) <= 40)) {
+      return {
+        status: 'error',
+        message:
+          `Terminal window did not take the requested position: wanted ` +
+          `{${bounds.x},${bounds.y}}, got {${recheck.x},${recheck.y}}`,
+      };
+    }
+  }
+
   return successMessage(
     step,
     [wantsDesktopMove(step) ? `desktop ${step.desktopIndex}` : null, fallbackReason ?? null],
@@ -251,12 +253,151 @@ async function positionTerminal(step: PositionWindowStep, knownWindowId?: number
   );
 }
 
+// ---- Generic apps, yabai available: authoritative windowing -----------------
+// yabai sees windows on hidden Spaces, never lists the phantom AX windows that
+// fooled the System Events path (Notes), matches by PID (no process-name
+// mismatch), and its move/resize works without the scripting-addition.
+
+function yabaiFrameToBounds(w: YabaiWindow): Bounds {
+  return {
+    x: Math.round(w.frame.x),
+    y: Math.round(w.frame.y),
+    width: Math.round(w.frame.w),
+    height: Math.round(w.frame.h),
+  };
+}
+
+async function positionViaYabai(
+  step: PositionWindowStep,
+  knownWindowId?: number,
+): Promise<StepLog> {
+  let win: YabaiWindow;
+  if (knownWindowId !== undefined) {
+    // A grouped opener (openTerminal) captured this window's exact id, which
+    // equals its yabai/CGWindowNumber id — position it directly, no app-wide
+    // search. yabai moves/resizes Terminal windows fine (System Events can't,
+    // hence Terminal's own AppleScript path is only the yabai-absent fallback).
+    const found = await queryWindowById(knownWindowId);
+    if (!found) {
+      return { status: 'error', message: `${step.appName}'s window (id ${knownWindowId}) no longer exists` };
+    }
+    win = found;
+  } else {
+    // Activate first: brings the app's Space forward and its target window to
+    // the front, mirroring what the user would see after a manual launch.
+    await runAppleScript(`tell application "${toAppleScriptString(step.appName)}" to activate`);
+    await sleep(300);
+
+    const pid = await resolveAppPid(step.appName);
+    if (pid === undefined) {
+      return { status: 'error', message: `${step.appName} is not running — cannot position it` };
+    }
+
+    // Wait briefly for a real window: reopen/launch animations lag the activate.
+    let candidates: YabaiWindow[] = [];
+    const deadline = Date.now() + 4000;
+    for (;;) {
+      candidates = await queryStandardWindowsByPid(pid);
+      if (step.windowTitle) {
+        candidates = candidates.filter((w) => w.title.includes(step.windowTitle!));
+      }
+      if (candidates.length > 0) break;
+      if (Date.now() > deadline) {
+        return {
+          status: 'error',
+          message: `${step.appName} has no open window to position${step.windowTitle ? ` matching "${step.windowTitle}"` : ''}`,
+        };
+      }
+      await sleep(300);
+    }
+    // Newest window (CGWindowNumbers increase) — the one this box just opened.
+    win = candidates.reduce((a, b) => (a.id > b.id ? a : b));
+  }
+
+  if (wantsDesktopMove(step)) {
+    const resolved = await resolveOrCreateDesktop(step);
+    if ('error' in resolved) {
+      return { status: 'error', message: resolved.error };
+    }
+    await moveWindowToSpace(win.id, resolved.space);
+    await sleep(300);
+  }
+
+  if (isNativeFullscreen(step)) {
+    // Native fullscreen creates its Space on whichever display the window is
+    // currently on, ignoring the box's target display. Move it onto the target
+    // display's workArea first so macOS fullscreens it on the right screen.
+    if (step.placement) {
+      const disp = resolveDisplayForPlacement(step.placement.display).display;
+      await setWindowFrame(win.id, {
+        x: disp.workArea.x,
+        y: disp.workArea.y,
+        width: disp.workArea.width,
+        height: disp.workArea.height,
+      });
+      await sleep(300);
+    }
+    if (!(await fullscreenWindowById(win.id))) {
+      return {
+        status: 'error',
+        message: `${step.appName}'s window did not enter fullscreen (a dialog/panel window can't be fullscreened)`,
+      };
+    }
+    return successMessage(
+      step,
+      [
+        step.windowTitle ? `window "${step.windowTitle}"` : null,
+        wantsDesktopMove(step) ? `desktop ${step.desktopIndex}` : null,
+      ],
+      'fullscreen',
+    );
+  }
+
+  const { bounds, actionLabel, fallbackReason } = await resolveTargetBounds(step, async () =>
+    yabaiFrameToBounds(win),
+  );
+
+  await setWindowFrame(win.id, bounds);
+  let after = await queryWindowById(win.id);
+  if (!after || !boundsMatch(bounds, yabaiFrameToBounds(after))) {
+    await sleep(300);
+    await setWindowFrame(win.id, bounds);
+    after = await queryWindowById(win.id);
+  }
+  if (!after) {
+    return { status: 'error', message: `${step.appName}'s window disappeared while positioning it` };
+  }
+  if (!boundsMatch(bounds, yabaiFrameToBounds(after))) {
+    const got = yabaiFrameToBounds(after);
+    return {
+      status: 'error',
+      message:
+        `${step.appName} did not take the requested frame: wanted ` +
+        `{${bounds.x},${bounds.y} ${bounds.width}x${bounds.height}}, got ` +
+        `{${got.x},${got.y} ${got.width}x${got.height}} (app may enforce its own size)`,
+    };
+  }
+
+  return successMessage(
+    step,
+    [
+      step.windowTitle ? `window "${step.windowTitle}"` : null,
+      wantsDesktopMove(step) ? `desktop ${step.desktopIndex}` : null,
+      fallbackReason ?? null,
+    ],
+    actionLabel,
+  );
+}
+
 // ---- Generic apps: System Events positioning --------------------------------
 async function getWindowRef(appName: string, windowTitle?: string): Promise<string> {
   const processRef = await resolveProcessRef(appName);
+  // Restrict to standard windows: activating apps can expose transient/phantom
+  // AX windows (observed with Notes) that accept `set position` yet never
+  // appear on screen — "window 1" happily targeted those.
   return windowTitle
     ? `first window of (${processRef}) whose name contains "${toAppleScriptString(windowTitle)}"`
-    : `window 1 of (${processRef})`;
+    : `first window of (${processRef}) whose subrole is "AXStandardWindow"`;
 }
 
 async function getWindowBounds(windowRef: string): Promise<Bounds> {
@@ -287,6 +428,35 @@ async function setWindowBounds(windowRef: string, bounds: Bounds): Promise<void>
   `);
 }
 
+// System Events reports success even when the app clamps or ignores the
+// request (fixed-size windows, min sizes, cross-display quirks), so read the
+// frame back and compare. One retry: the first set can land while the window
+// is still animating open.
+const BOUNDS_TOLERANCE_PX = 40;
+
+function boundsMatch(a: Bounds, b: Bounds): boolean {
+  return (
+    Math.abs(a.x - b.x) <= BOUNDS_TOLERANCE_PX &&
+    Math.abs(a.y - b.y) <= BOUNDS_TOLERANCE_PX &&
+    Math.abs(a.width - b.width) <= BOUNDS_TOLERANCE_PX &&
+    Math.abs(a.height - b.height) <= BOUNDS_TOLERANCE_PX
+  );
+}
+
+async function setAndVerifyWindowBounds(
+  windowRef: string,
+  bounds: Bounds,
+): Promise<{ applied: boolean; actual: Bounds }> {
+  await setWindowBounds(windowRef, bounds);
+  let actual = await getWindowBounds(windowRef);
+  if (boundsMatch(bounds, actual)) return { applied: true, actual };
+
+  await sleep(300);
+  await setWindowBounds(windowRef, bounds);
+  actual = await getWindowBounds(windowRef);
+  return { applied: boundsMatch(bounds, actual), actual };
+}
+
 // Put a window into native (macOS) fullscreen via the accessibility API. This
 // is a different AX attribute from move/resize, so it works for most apps even
 // where precise positioning is finicky.
@@ -302,11 +472,31 @@ async function positionGeneric(step: PositionWindowStep): Promise<StepLog> {
   // "activate" reliably brings the app to the actual OS-level front. System
   // Events' "set frontmost of process to true" can silently fail to stick
   // (observed with Chrome), leaving us acting on the wrong window even
-  // though this step would otherwise report success.
+  // though this step would otherwise report success. Activating also switches
+  // to the window's Space when it lives on a hidden desktop — System Events
+  // cannot see (let alone move) windows on non-visible Spaces.
   await runAppleScript(`tell application "${toAppleScriptString(step.appName)}" to activate`);
   await sleep(300);
 
   const windowRef = await getWindowRef(step.appName, step.windowTitle);
+
+  // The Space-switch/open animation can lag the activate; give the window a
+  // moment to become observable before failing the whole step.
+  const refDeadline = Date.now() + 3000;
+  for (;;) {
+    try {
+      await getWindowBounds(windowRef);
+      break;
+    } catch (err) {
+      if (Date.now() > refDeadline) {
+        return {
+          status: 'error',
+          message: `${step.appName} has no on-screen window to position (is it open on a hidden Space or without windows?)`,
+        };
+      }
+      await sleep(300);
+    }
+  }
 
   if (step.windowTitle) {
     await runAppleScript(`
@@ -317,22 +507,10 @@ async function positionGeneric(step: PositionWindowStep): Promise<StepLog> {
     await sleep(200);
   }
 
+  // This path only runs when yabai is absent (positionViaYabai handles the
+  // rest), and desktop moves are impossible without it.
   if (wantsDesktopMove(step)) {
-    if (!(await isYabaiAvailable())) {
-      return { status: 'error', message: YABAI_MISSING_MESSAGE };
-    }
-    const resolved = await resolveOrCreateDesktop(step);
-    if ('error' in resolved) {
-      return { status: 'error', message: resolved.error };
-    }
-    // Creating desktops changes display focus; re-activate our window so yabai
-    // moves the right one.
-    if (resolved.created > 0) {
-      await runAppleScript(`tell application "${toAppleScriptString(step.appName)}" to activate`);
-      await sleep(200);
-    }
-    await moveFocusedWindowToSpace(resolved.space);
-    await sleep(300);
+    return { status: 'error', message: YABAI_MISSING_MESSAGE };
   }
 
   if (isNativeFullscreen(step)) {
@@ -348,7 +526,17 @@ async function positionGeneric(step: PositionWindowStep): Promise<StepLog> {
   }
 
   const { bounds, actionLabel, fallbackReason } = await resolveTargetBounds(step, () => getWindowBounds(windowRef));
-  await setWindowBounds(windowRef, bounds);
+  const { applied, actual } = await setAndVerifyWindowBounds(windowRef, bounds);
+  if (!applied) {
+    return {
+      status: 'error',
+      message:
+        `${step.appName} did not take the requested frame: wanted ` +
+        `{${bounds.x},${bounds.y} ${bounds.width}x${bounds.height}}, got ` +
+        `{${actual.x},${actual.y} ${actual.width}x${actual.height}} ` +
+        `(app may enforce its own size, or the window is on another Space)`,
+    };
+  }
 
   return successMessage(
     step,
@@ -366,9 +554,17 @@ export async function handlePositionWindow(
   knownWindowId?: number,
 ): Promise<StepLog> {
   try {
-    return isTerminalStep(step, knownWindowId)
-      ? await positionTerminal(step, knownWindowId)
-      : await positionGeneric(step);
+    // Prefer yabai when present: it positions every app — Terminal included —
+    // by window id, without System Events' -10006 refusal or Terminal's
+    // display-relative coordinate quirks. Without yabai, Terminal needs its own
+    // AppleScript path and other apps fall back to System Events.
+    if (await isYabaiAvailable()) {
+      return await positionViaYabai(step, knownWindowId);
+    }
+    if (isTerminalStep(step, knownWindowId)) {
+      return await positionTerminal(step, knownWindowId);
+    }
+    return await positionGeneric(step);
   } catch (error) {
     return {
       status: 'error',

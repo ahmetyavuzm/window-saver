@@ -3,6 +3,10 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 
+export function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export function toAppleScriptString(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }
@@ -22,6 +26,25 @@ export async function runJXA(script: string): Promise<string> {
 
 export async function runShell(command: string, args: string[]): Promise<void> {
   await execFileAsync(command, args);
+}
+
+// Best-effort PID resolution via System Events (bundle-id matched), polling
+// briefly because a just-launched app registers with System Events late.
+// Returns undefined instead of throwing — callers treat it as "not trackable".
+export async function resolveAppPid(appName: string, timeoutMs = 4000): Promise<number | undefined> {
+  const processRef = await resolveProcessRef(appName);
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const result = await runAppleScript(`tell application "System Events" to unix id of (${processRef})`);
+      const pid = parseInt(result, 10);
+      if (!Number.isNaN(pid)) return pid;
+    } catch {
+      // process may not have registered with System Events yet; keep polling
+    }
+    await sleep(200);
+  }
+  return undefined;
 }
 
 // System Events registers a running app under its executable's process name,

@@ -2,9 +2,18 @@ import { app, screen } from 'electron';
 import { createTray } from './tray.js';
 import { registerIpcHandlers } from './ipc.js';
 import { reregisterHotkeys } from './hotkeys.js';
-import { showOnboardingWindow, getEditorWindow } from './windows.js';
+import { showOnboardingWindow, showEditorWindow, getEditorWindow } from './windows.js';
 import { listDisplays } from './displays.js';
 import * as store from './store.js';
+
+// Two live instances mean two tray icons, duplicate global hotkeys, and both
+// processes rewriting the same config.json. Hand off to the running one.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+}
+app.on('second-instance', () => {
+  showEditorWindow();
+});
 
 app.dock?.hide();
 

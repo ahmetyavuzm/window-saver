@@ -1,10 +1,6 @@
 import type { BoxAction } from '../../../shared/types.js';
-import { runShell, runAppleScript } from '../applescript.js';
+import { runShell, runAppleScript, sleep } from '../applescript.js';
 import type { StepResult } from '../types.js';
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 // appName comes from the containing box's positionWindow step, not the
 // action itself — every openTarget action in a box targets the same app.

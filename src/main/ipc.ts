@@ -11,7 +11,7 @@ import { terminateTarget } from './engine/terminate.js';
 import { isYabaiAvailable, installYabai, ensureSpacesOnDisplay } from './engine/yabai.js';
 import { createDesktopViaMissionControl } from './engine/missioncontrol.js';
 import { captureWindows, stepsFromCapturedWindows } from './engine/capture.js';
-import type { CapturedWindow, Step, StopResult, UserSettings } from '../shared/types.js';
+import type { CapturedWindow, StopResult, UserSettings } from '../shared/types.js';
 
 function onProfilesChanged(): void {
   rebuildTrayMenu();
@@ -20,7 +20,6 @@ function onProfilesChanged(): void {
 
 export function registerIpcHandlers(): void {
   ipcMain.handle('profiles:list', () => store.listProfiles());
-  ipcMain.handle('profiles:get', (_event, id: string) => store.getProfile(id));
   ipcMain.handle('profiles:create', (_event, name: string) => {
     const profile = store.createProfile(name);
     onProfilesChanged();
@@ -39,16 +38,10 @@ export function registerIpcHandlers(): void {
     onProfilesChanged();
     return deleted;
   });
-  ipcMain.handle('profiles:addStep', (_event, profileId: string, step: Step) => {
-    const profile = store.addStep(profileId, step);
-    onProfilesChanged();
-    return profile;
-  });
   ipcMain.handle('profiles:run', async (_event, profileId: string) => {
     const profile = store.getProfile(profileId);
     if (!profile) return { profileId, ok: false, log: [], hasTrackedTargets: false };
-    const createNewDesktop = store.getSettings().desktopMode === 'createNew';
-    return runProfile(profile, { createNewDesktop });
+    return runProfile(profile);
   });
   ipcMain.handle('profiles:stop', async (_event, profileId: string): Promise<StopResult> => {
     const targets = registry.getTracked(profileId);
@@ -59,10 +52,11 @@ export function registerIpcHandlers(): void {
   });
 
   ipcMain.handle('hotkeys:checkConflict', (_event, accelerator: string, ownerProfileId: string) => {
-    const claimedByAnotherProfile = store
-      .listProfiles()
-      .some((p) => p.id !== ownerProfileId && p.hotkey === accelerator);
-    if (claimedByAnotherProfile) return true;
+    const profiles = store.listProfiles();
+    // Re-entering a profile's own current hotkey is not a conflict, even though
+    // globalShortcut reports it as registered (it is — by this very profile).
+    if (profiles.find((p) => p.id === ownerProfileId)?.hotkey === accelerator) return false;
+    if (profiles.some((p) => p.id !== ownerProfileId && p.hotkey === accelerator)) return true;
     return globalShortcut.isRegistered(accelerator);
   });
 
@@ -90,8 +84,10 @@ export function registerIpcHandlers(): void {
   );
 
   // SIP-free desktop creation via Mission Control's "+" (AX). Lands on the
-  // active display; the user drags it/windows to the target screen.
-  ipcMain.handle('desktops:createNew', () => createDesktopViaMissionControl());
+  // display whose frame matches `origin`, so it appears where the caller wants.
+  ipcMain.handle('desktops:createNew', (_event, origin: { x: number; y: number }) =>
+    createDesktopViaMissionControl(origin),
+  );
 
   ipcMain.handle('windows:capture', () => captureWindows());
 

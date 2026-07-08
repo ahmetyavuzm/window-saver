@@ -228,30 +228,9 @@ input:focus, select:focus {
 
 .empty-state { color: var(--text-muted); text-align: center; margin-top: 80px; font-size: 14px; }
 
-/* ---------------------------------------------------------------------------
-   Step list
---------------------------------------------------------------------------- */
-.step-list { list-style: none; padding: 0; margin: 0 0 16px; }
-.step-card {
-  display: flex; align-items: center; gap: 10px;
-  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
-  padding: 10px 14px; margin-bottom: 6px; cursor: grab;
-  box-shadow: var(--shadow-sm);
-  transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease), border-color var(--dur) var(--ease);
-}
-.step-card:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); border-color: var(--border-strong); }
-.step-type { font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent); }
-.step-summary { flex: 1; }
-.step-list .empty { color: var(--text-muted); padding: 8px; }
 .delete-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px; line-height: 1; padding: 2px 6px; }
 .delete-btn:hover { color: var(--danger); background: none; border: none; }
 
-.step-group { align-items: flex-start; }
-.step-group-body { flex: 1; }
-.step-group-steps { list-style: none; padding: 0; margin: 4px 0 0; }
-.step-group-steps li { padding: 2px 0; color: var(--text-muted); }
-
-.step-editor-form { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .checkbox { display: flex; align-items: center; gap: 4px; }
 
 /* ---------------------------------------------------------------------------

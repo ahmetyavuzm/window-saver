@@ -14,8 +14,6 @@ import {
   type LayoutBox,
 } from './hooks/useLayoutBoxes';
 import { ProfileList } from './components/ProfileList';
-import { StepList } from './components/StepList';
-import { StepEditorForm } from './components/StepEditorForm';
 import { LayoutCanvas } from './components/layout/LayoutCanvas';
 import { WindowBox } from './components/layout/WindowBox';
 import { BoxConfigPanel } from './components/layout/BoxConfigPanel';
@@ -150,11 +148,6 @@ export function App() {
     void setSteps(selected.id, steps);
   }
 
-  function handleAddSteps(newSteps: Step[]) {
-    if (!selected) return;
-    void setSteps(selected.id, [...selected.steps, ...newSteps]);
-  }
-
   async function handleHotkeyChange(hotkey: string) {
     if (!selected) return;
     if (hotkey) {
@@ -268,13 +261,13 @@ export function App() {
       );
       if (res.needsScriptingAddition) {
         // yabai can't create desktops without its SIP-off scripting-addition.
-        // Fall back to the SIP-free Mission Control "+" (AX) — it lands on the
-        // active display, so the user drags it to the target screen.
-        const ax = await window.windowSaver.createDesktop();
+        // Fall back to the SIP-free Mission Control "+" (AX), targeting this
+        // display's frame so the desktop lands on the right screen.
+        const ax = await window.windowSaver.createDesktop({ x: display.bounds.x, y: display.bounds.y });
         setNotice(
           ax.created
-            ? 'Yeni masaüstü Mission Control ile oluşturuldu (aktif ekranda). ' +
-                'Doğru ekrana sürükleyip pencereleri yerleştirin. ' +
+            ? `Yeni masaüstü Mission Control ile oluşturuldu (${where}). ` +
+                'Pencereleri sürükleyerek yerleştirebilirsiniz. ' +
                 'Ekran-bazlı otomatik yerleştirme için yabai --load-sa gerekir.'
             : 'Masaüstü oluşturulamadı (Mission Control). Erişilebilirlik izni açık mı? ' +
                 (ax.error ?? ''),
@@ -301,28 +294,34 @@ export function App() {
     if (!selected) return;
     setRunning(true);
     setRunResult(null);
-    const result = await runProfile(selected.id);
-    setRunResult(result);
-    setRunning(false);
-    setHasTrackedTargets(result.hasTrackedTargets);
+    try {
+      const result = await runProfile(selected.id);
+      setRunResult(result);
+      setHasTrackedTargets(result.hasTrackedTargets);
+    } finally {
+      setRunning(false);
+    }
   }
 
   async function handleStop() {
     if (!selected) return;
     setStopping(true);
-    const stopResult = await stopProfile(selected.id);
-    setRunResult((prev) => {
-      const stopLog = stopResult.results.map((r) => ({
-        stepId: 'stop',
-        status: (r.closed ? 'ok' : 'error') as 'ok' | 'error',
-        message: `Closed ${r.label}: ${r.method}`,
-        timestamp: new Date().toISOString(),
-      }));
-      if (!prev) return { profileId: selected.id, ok: stopResult.ok, log: stopLog, hasTrackedTargets: false };
-      return { ...prev, log: [...prev.log, ...stopLog] };
-    });
-    setHasTrackedTargets(false);
-    setStopping(false);
+    try {
+      const stopResult = await stopProfile(selected.id);
+      setRunResult((prev) => {
+        const stopLog = stopResult.results.map((r) => ({
+          stepId: 'stop',
+          status: (r.closed ? 'ok' : 'error') as 'ok' | 'error',
+          message: `Closed ${r.label}: ${r.method}`,
+          timestamp: new Date().toISOString(),
+        }));
+        if (!prev) return { profileId: selected.id, ok: stopResult.ok, log: stopLog, hasTrackedTargets: false };
+        return { ...prev, log: [...prev.log, ...stopLog] };
+      });
+      setHasTrackedTargets(false);
+    } finally {
+      setStopping(false);
+    }
   }
 
   if (loading) return <div className="app">Loading…</div>;
@@ -479,8 +478,6 @@ export function App() {
                 }
               />
             )}
-            <StepList steps={selected.steps} onChange={handleStepsChange} />
-            <StepEditorForm onAdd={handleAddSteps} />
             {runResult && (
               <div className={`run-console${runResult.ok ? '' : ' failed'}`}>
                 <h3>Run log ({runResult.ok ? 'ok' : 'failed'})</h3>

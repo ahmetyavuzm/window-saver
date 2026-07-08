@@ -1,13 +1,9 @@
 import type { Step } from '../../../shared/types.js';
-import { runShell, runAppleScript, toAppleScriptString } from '../applescript.js';
+import { runShell, runAppleScript, toAppleScriptString, sleep } from '../applescript.js';
 import type { StepResult } from '../types.js';
 import type { TrackedTarget } from '../registry.js';
 
 type OpenUrlStep = Extract<Step, { type: 'openUrl' }>;
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 // "default" browser can't be targeted by name in AppleScript, so a dedicated
 // window opened that way can't be tracked for Close/Stop — best-effort only.
@@ -25,55 +21,32 @@ async function resolveNewWindowTarget(browser: string, url: string): Promise<Tra
 
 // Best-effort: find a tab matching the URL in the browser's frontmost window
 // when opening into an existing window/tab rather than a dedicated one.
-// Only Chrome and Safari expose a scriptable tab list; other browsers (Arc,
-// etc.) are skipped rather than risk closing the wrong window later.
+// Only Chrome and Safari expose a scriptable tab list (the same script works
+// for both); other browsers (Arc, etc.) are skipped rather than risk closing
+// the wrong window later.
 async function resolveExistingTabTarget(browser: string, url: string): Promise<TrackedTarget | undefined> {
-  const escapedUrl = toAppleScriptString(url);
+  if (browser !== 'Google Chrome' && browser !== 'Safari') return undefined;
   try {
     await sleep(300);
-    if (browser === 'Google Chrome') {
-      const result = await runAppleScript(`
-        tell application "Google Chrome"
-          set win to window 1
-          set winId to id of win
-          set tabIndex to 0
-          repeat with i from 1 to (count of tabs of win)
-            if (URL of tab i of win) contains "${escapedUrl}" then
-              set tabIndex to i
-              exit repeat
-            end if
-          end repeat
-          return (winId as text) & "," & (tabIndex as text)
-        end tell
-      `);
-      const [winIdStr, tabIndexStr] = result.split(',');
-      const winId = parseInt(winIdStr, 10);
-      const tabIndex = parseInt(tabIndexStr, 10);
-      if (Number.isNaN(winId) || tabIndex <= 0) return undefined;
-      return { kind: 'browserTab', label: url, browser, windowId: winId, tabIndex };
-    }
-    if (browser === 'Safari') {
-      const result = await runAppleScript(`
-        tell application "Safari"
-          set win to window 1
-          set winId to id of win
-          set tabIndex to 0
-          repeat with i from 1 to (count of tabs of win)
-            if (URL of tab i of win) contains "${escapedUrl}" then
-              set tabIndex to i
-              exit repeat
-            end if
-          end repeat
-          return (winId as text) & "," & (tabIndex as text)
-        end tell
-      `);
-      const [winIdStr, tabIndexStr] = result.split(',');
-      const winId = parseInt(winIdStr, 10);
-      const tabIndex = parseInt(tabIndexStr, 10);
-      if (Number.isNaN(winId) || tabIndex <= 0) return undefined;
-      return { kind: 'browserTab', label: url, browser, windowId: winId, tabIndex };
-    }
-    return undefined;
+    const result = await runAppleScript(`
+      tell application "${browser}"
+        set win to window 1
+        set winId to id of win
+        set tabIndex to 0
+        repeat with i from 1 to (count of tabs of win)
+          if (URL of tab i of win) contains "${toAppleScriptString(url)}" then
+            set tabIndex to i
+            exit repeat
+          end if
+        end repeat
+        return (winId as text) & "," & (tabIndex as text)
+      end tell
+    `);
+    const [winIdStr, tabIndexStr] = result.split(',');
+    const winId = parseInt(winIdStr, 10);
+    const tabIndex = parseInt(tabIndexStr, 10);
+    if (Number.isNaN(winId) || tabIndex <= 0) return undefined;
+    return { kind: 'browserTab', label: url, browser, windowId: winId, tabIndex };
   } catch {
     return undefined;
   }

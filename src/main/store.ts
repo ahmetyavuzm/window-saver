@@ -1,5 +1,7 @@
-import Store from 'electron-store';
+import { app } from 'electron';
 import { randomUUID } from 'node:crypto';
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
 import type { Profile, Settings, StoreSchema, Step, UserSettings } from '../shared/types.js';
 
 const CURRENT_SCHEMA_VERSION = 6;
@@ -13,15 +15,30 @@ const DEFAULT_SETTINGS: Settings = {
   desktopMode: 'reuse',
 };
 
-const store = new Store<StoreSchema>({
-  name: 'config',
-  defaults: {
-    profiles: [],
-    settings: DEFAULT_SETTINGS,
-  },
-});
+// Same file electron-store used to write, so stores from older versions are
+// picked up unchanged.
+const storeFile = path.join(app.getPath('userData'), 'config.json');
 
+function loadStore(): StoreSchema {
+  try {
+    const raw = JSON.parse(readFileSync(storeFile, 'utf8')) as Partial<StoreSchema>;
+    // Missing settings fields are filled by migrateStore's DEFAULT_SETTINGS spread.
+    return { profiles: raw.profiles ?? [], settings: raw.settings ?? { ...DEFAULT_SETTINGS } };
+  } catch {
+    return { profiles: [], settings: { ...DEFAULT_SETTINGS } }; // first run / unreadable file
+  }
+}
+
+const data = loadStore();
 migrateStore();
+
+function persist(): void {
+  mkdirSync(path.dirname(storeFile), { recursive: true });
+  // Write-then-rename so a crash mid-write can never corrupt config.json.
+  const tmp = `${storeFile}.tmp`;
+  writeFileSync(tmp, JSON.stringify(data, null, 2));
+  renameSync(tmp, storeFile);
+}
 
 /**
  * Migrations here are purely additive:
@@ -41,33 +58,29 @@ migrateStore();
  *    fills the default ('reuse'), preserving prior behavior.
  */
 function migrateStore(): void {
-  const settings = store.get('settings');
-  if (settings.schemaVersion >= CURRENT_SCHEMA_VERSION) return;
+  if (data.settings.schemaVersion >= CURRENT_SCHEMA_VERSION) return;
 
-  if (settings.schemaVersion < 4) {
-    const profiles = store.get('profiles');
-    let changed = false;
-    for (const profile of profiles) {
+  if (data.settings.schemaVersion < 4) {
+    for (const profile of data.profiles) {
       for (const step of profile.steps as Array<Step & { spaceIndex?: number }>) {
         if (step.type !== 'positionWindow') continue;
         if (step.spaceIndex === undefined) continue;
         if (step.desktopIndex === undefined) step.desktopIndex = step.spaceIndex;
         delete step.spaceIndex;
-        changed = true;
       }
     }
-    if (changed) store.set('profiles', profiles);
   }
 
-  store.set('settings', { ...DEFAULT_SETTINGS, ...settings, schemaVersion: CURRENT_SCHEMA_VERSION });
+  data.settings = { ...DEFAULT_SETTINGS, ...data.settings, schemaVersion: CURRENT_SCHEMA_VERSION };
+  persist();
 }
 
 export function listProfiles(): Profile[] {
-  return store.get('profiles');
+  return data.profiles;
 }
 
 export function getProfile(id: string): Profile | undefined {
-  return listProfiles().find((p) => p.id === id);
+  return data.profiles.find((p) => p.id === id);
 }
 
 export function createProfile(name: string): Profile {
@@ -79,9 +92,8 @@ export function createProfile(name: string): Profile {
     createdAt: now,
     updatedAt: now,
   };
-  const profiles = listProfiles();
-  profiles.push(profile);
-  store.set('profiles', profiles);
+  data.profiles.push(profile);
+  persist();
   return profile;
 }
 
@@ -89,24 +101,25 @@ export function updateProfile(
   id: string,
   changes: Partial<Pick<Profile, 'name' | 'hotkey' | 'steps'>>,
 ): Profile | undefined {
-  const profiles = listProfiles();
-  const index = profiles.findIndex((p) => p.id === id);
+  const index = data.profiles.findIndex((p) => p.id === id);
   if (index === -1) return undefined;
   const updated: Profile = {
-    ...profiles[index],
+    ...data.profiles[index],
     ...changes,
     updatedAt: new Date().toISOString(),
   };
-  profiles[index] = updated;
-  store.set('profiles', profiles);
+  data.profiles[index] = updated;
+  persist();
   return updated;
 }
 
 export function deleteProfile(id: string): boolean {
-  const profiles = listProfiles();
-  const next = profiles.filter((p) => p.id !== id);
-  const changed = next.length !== profiles.length;
-  if (changed) store.set('profiles', next);
+  const next = data.profiles.filter((p) => p.id !== id);
+  const changed = next.length !== data.profiles.length;
+  if (changed) {
+    data.profiles = next;
+    persist();
+  }
   return changed;
 }
 
@@ -117,19 +130,16 @@ export function addStep(profileId: string, step: Step): Profile | undefined {
 }
 
 export function getSettings(): Settings {
-  return store.get('settings');
+  return data.settings;
 }
 
 export function updateSettings(partial: Partial<UserSettings>): Settings {
-  const next: Settings = { ...getSettings(), ...partial };
-  store.set('settings', next);
-  return next;
+  data.settings = { ...data.settings, ...partial };
+  persist();
+  return data.settings;
 }
 
 export function setOnboardingComplete(complete: boolean): void {
-  store.set('settings', { ...getSettings(), onboardingComplete: complete });
-}
-
-export function storeFilePath(): string {
-  return store.path;
+  data.settings = { ...data.settings, onboardingComplete: complete };
+  persist();
 }

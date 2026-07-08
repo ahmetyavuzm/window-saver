@@ -18,7 +18,9 @@ export function rebuildTrayMenu(): void {
       ? profiles.map((profile) => ({
           label: profile.name,
           click: () => {
-            void runProfile(profile);
+            // Fresh lookup: the menu item may outlive an edit to the profile.
+            const fresh = store.getProfile(profile.id);
+            if (fresh) void runProfile(fresh);
           },
         }))
       : [{ label: 'No profiles yet', enabled: false }];

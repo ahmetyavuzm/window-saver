@@ -1,6 +1,5 @@
 import type {
   Profile,
-  Step,
   RunResult,
   PermissionStatus,
   DisplayInfo,
@@ -13,14 +12,12 @@ import type {
 
 export interface WindowSaverApi {
   listProfiles(): Promise<Profile[]>;
-  getProfile(id: string): Promise<Profile | undefined>;
   createProfile(name: string): Promise<Profile>;
   updateProfile(
     id: string,
     changes: Partial<Pick<Profile, 'name' | 'hotkey' | 'steps'>>,
   ): Promise<Profile | undefined>;
   deleteProfile(id: string): Promise<boolean>;
-  addStep(profileId: string, step: Step): Promise<Profile | undefined>;
   runProfile(profileId: string): Promise<RunResult>;
   stopProfile(profileId: string): Promise<StopResult>;
   checkHotkeyConflict(accelerator: string, ownerProfileId: string): Promise<boolean>;
@@ -38,7 +35,7 @@ export interface WindowSaverApi {
     displayBounds: { x: number; y: number },
     target: number,
   ): Promise<{ created: number; needsScriptingAddition: boolean }>;
-  createDesktop(): Promise<{ created: boolean; error?: string }>;
+  createDesktop(origin: { x: number; y: number }): Promise<{ created: boolean; error?: string }>;
   captureWindows(): Promise<CapturedWindow[]>;
   createProfileFromWindows(name: string, windows: CapturedWindow[]): Promise<Profile | undefined>;
 }

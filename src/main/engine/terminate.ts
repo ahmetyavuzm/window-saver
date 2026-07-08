@@ -1,10 +1,6 @@
 import type { StopResultEntry } from '../../shared/types.js';
 import type { TrackedTarget } from './registry.js';
-import { runAppleScript, toAppleScriptString } from './applescript.js';
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+import { runAppleScript, toAppleScriptString, sleep } from './applescript.js';
 
 function isProcessAlive(pid: number): boolean {
   try {

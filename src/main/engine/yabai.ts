@@ -3,6 +3,7 @@ import { promisify } from 'node:util';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import type { YabaiInstallResult } from '../../shared/types.js';
+import { sleep } from './applescript.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -18,7 +19,7 @@ function resolveBrewPath(): string | null {
   return null;
 }
 
-const YABAI_MISSING_MESSAGE =
+export const YABAI_MISSING_MESSAGE =
   'yabai bulunamadı. Space (masaüstü) desteği için yabai kurulu ve çalışır olmalı: ' +
   '"brew install yabai" (veya kullandığınız fork), ardından "yabai --start-service" ve ' +
   'Sistem Ayarları > Gizlilik ve Güvenlik > Erişilebilirlik izni gerekli.';
@@ -36,6 +37,7 @@ interface YabaiSpace {
 }
 
 export interface YabaiWindow {
+  id: number; // == CGWindowNumber
   app: string;
   pid: number;
   title: string;
@@ -49,13 +51,6 @@ export interface YabaiWindow {
   'is-hidden': boolean;
   'root-window': boolean;
 }
-
-const SCRIPTING_ADDITION_MESSAGE =
-  'Masaüstü (Space) otomatik oluşturmak için yabai\'nin scripting-addition\'ı gerekli. ' +
-  'Bunun için önce kısmi SIP kapatılmalı (Recovery > "csrutil disable" veya yabai\'nin ' +
-  'belgelediği kısmi kapatma), sonra Terminal\'de "sudo yabai --load-sa" çalıştırılmalı. ' +
-  'SIP açıkken macOS buna izin vermez; o durumda masaüstünü Mission Control\'den ' +
-  '(Ctrl+Yukarı Ok, sağ üstteki +) elle ekleyin.';
 
 // Match a physical display (by frame origin) to its yabai display. Nearest
 // origin wins so a small rounding/arrangement drift still resolves.
@@ -94,7 +89,7 @@ export async function isYabaiAvailable(): Promise<boolean> {
 // Automates the part that's actually automatable (brew install + start the
 // service). Granting Accessibility and loading the scripting-addition need
 // user interaction / a SIP change respectively, so we stop short of those and
-// tell the user what's left. See SCRIPTING_ADDITION_MESSAGE for the SA part.
+// tell the user what's left.
 export async function installYabai(): Promise<YabaiInstallResult> {
   const brewPath = resolveBrewPath();
   if (!brewPath) {
@@ -143,6 +138,71 @@ export async function queryWindows(): Promise<YabaiWindow[]> {
   return JSON.parse(stdout) as YabaiWindow[];
 }
 
+// yabai is the authoritative window source when present: unlike System Events
+// it sees windows on hidden Spaces, only lists windows that really exist on
+// screen (activating apps expose phantom AX windows that accept `set position`
+// yet never render — observed with Notes), and matching by PID sidesteps the
+// process-name/app-name mismatch entirely.
+function isRealStandardWindow(w: YabaiWindow): boolean {
+  return (
+    w.subrole === 'AXStandardWindow' && !w['is-minimized'] && !w['is-hidden'] && w['root-window']
+  );
+}
+
+export async function queryStandardWindowsByPid(pid: number): Promise<YabaiWindow[]> {
+  return (await queryWindows()).filter((w) => w.pid === pid && isRealStandardWindow(w));
+}
+
+export async function queryWindowById(windowId: number): Promise<YabaiWindow | null> {
+  try {
+    const stdout = await runYabai(['query', '--windows', '--window', String(windowId)]);
+    return JSON.parse(stdout) as YabaiWindow;
+  } catch {
+    return null;
+  }
+}
+
+// Move/resize a specific window (no scripting-addition needed). Resize first:
+// with the old size still applied, moving to a display at negative coordinates
+// can put the window fully off-screen where macOS refuses further changes.
+export async function setWindowFrame(
+  windowId: number,
+  bounds: { x: number; y: number; width: number; height: number },
+): Promise<void> {
+  await runYabai(['window', String(windowId), '--resize', `abs:${bounds.width}:${bounds.height}`]);
+  await runYabai(['window', String(windowId), '--move', `abs:${bounds.x}:${bounds.y}`]);
+}
+
+// Native-fullscreen a specific window; yabai only has a *toggle*, so check
+// first to avoid un-fullscreening an already fullscreen window. The toggle is
+// async AND silently no-ops on windows that can't fullscreen (e.g. an Open/Save
+// panel), so verify the result and report it truthfully rather than assuming
+// success. Returns false when the window never entered fullscreen.
+export async function fullscreenWindowById(windowId: number): Promise<boolean> {
+  const win = await queryWindowById(windowId);
+  if (win && win['is-native-fullscreen']) return true;
+  await runYabai(['window', String(windowId), '--toggle', 'native-fullscreen']);
+  for (let i = 0; i < 6; i++) {
+    await sleep(300);
+    const after = await queryWindowById(windowId);
+    if (after && after['is-native-fullscreen']) return true;
+  }
+  return false;
+}
+
+export async function moveWindowToSpace(windowId: number, spaceIndex: number): Promise<void> {
+  try {
+    await runYabai(['window', String(windowId), '--space', String(spaceIndex)]);
+  } catch (error) {
+    if (!isBenignYabaiNoop(error)) throw error;
+  }
+  try {
+    await runYabai(['space', '--focus', String(spaceIndex)]);
+  } catch (error) {
+    if (!isBenignYabaiNoop(error)) throw error;
+  }
+}
+
 /**
  * Create as many real Spaces as needed so the given display has at least
  * `target` regular (non-fullscreen) desktops. Returns how many were actually
@@ -177,7 +237,7 @@ export async function ensureSpacesOnDisplay(
  * "scripting-addition" error, which we surface via `needsScriptingAddition` so
  * the UI can point the user at `sudo yabai --load-sa` instead of failing hard.
  */
-export async function createSpaceOnDisplay(
+async function createSpaceOnDisplay(
   displayBounds: { x: number; y: number },
 ): Promise<{ created: boolean; needsScriptingAddition: boolean }> {
   const displays = await queryDisplays();
@@ -250,29 +310,3 @@ function isBenignYabaiNoop(error: unknown): boolean {
   return /already focused|already on this space/i.test(message);
 }
 
-// Put the currently focused window into native fullscreen. yabai only exposes a
-// *toggle*, so query first and no-op if it is already fullscreen (avoids turning
-// an already-fullscreen window back to windowed). Used for apps (e.g. Terminal)
-// that reject the System Events AXFullScreen path.
-export async function fullscreenFocusedWindow(): Promise<void> {
-  const stdout = await runYabai(['query', '--windows', '--window']);
-  const win = JSON.parse(stdout) as { 'is-native-fullscreen'?: boolean };
-  if (!win['is-native-fullscreen']) {
-    await runYabai(['window', '--toggle', 'native-fullscreen']);
-  }
-}
-
-export async function moveFocusedWindowToSpace(spaceIndex: number): Promise<void> {
-  try {
-    await runYabai(['window', '--space', String(spaceIndex)]);
-  } catch (error) {
-    if (!isBenignYabaiNoop(error)) throw error;
-  }
-  try {
-    await runYabai(['space', '--focus', String(spaceIndex)]);
-  } catch (error) {
-    if (!isBenignYabaiNoop(error)) throw error;
-  }
-}
-
-export { YABAI_MISSING_MESSAGE, SCRIPTING_ADDITION_MESSAGE };
